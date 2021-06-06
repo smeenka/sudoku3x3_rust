@@ -97,15 +97,14 @@ fn build_cell<T:Data> (cell: RcSudokuCell) -> impl Widget<T> {
     let mut color = Color::WHITE;
     let mut size = 24.0;
     match cell.get_state() {
-        CellState::Solved(v, actor)   => {
+        CellState::Solved(_, _actor)   => {
             color = Color::YELLOW;
             size = 24.0;
         },
-        CellState::UnSolved(u) => { 
+        CellState::UnSolved(_u) => { 
             color = Color::Rgba32(0xF0F0F0F0);
             size = 14.0;
         },
-        _  =>  () 
     }
 
 
@@ -129,7 +128,6 @@ fn build_cell<T:Data> (cell: RcSudokuCell) -> impl Widget<T> {
                 };
                 format!("{}",result)
             },
-            _  =>  "..".to_string() 
         }
     }))             
 } //build_cell
