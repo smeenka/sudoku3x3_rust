@@ -54,7 +54,13 @@ impl SudokuCell {
     pub fn get_resolved_mask(&self) -> usize {
         // zero bits in the mask indicate resolved cells, one bits are unresolved cells
         match self.value {
-            CellState::Solved(v,_) =>  ! ( 1<< (v-1) ),
+            CellState::Solved(v,_) =>   {
+                //println!("{}",v);
+                if v > 0 { ! (1<< (v-1))  } else {
+                    println!{"Somthing wrong with value on row {} col {} value {} " , self.row,self.col,v};
+                    !0
+                }
+            },
             _ => !0,
         }
     }
@@ -64,7 +70,13 @@ impl SudokuCell {
      */
     pub fn get_unresolved_mask(&self) -> usize {
         match self.value {
-            CellState::Solved(v,_) =>   1<< (v-1),
+            CellState::Solved(v,_) =>   {
+                //println!("{}",v);
+                if v > 0 { !(1<< (v-1)) } else {
+                    println!{"Somthing wrong with value on row {} col {} value {} " , self.row,self.col,v};
+                    !0
+                }
+            },
             CellState::UnSolved(n) =>  n,
             _ => 0,
         }
@@ -81,7 +93,7 @@ impl SudokuCell {
                     let mut cv = 0;
                     for n in 0 .. (CELL_SIZE ) {
                         if 1 << n  == new_mask {
-                            cv = n;
+                            cv = n + 1;
                             break;
                         }
                     };  
@@ -479,6 +491,7 @@ fn solver_next_step(row_col_square: &dyn RowColSquare) {
             mask = mask >> 1;
         }
     }
+    
     // for each position in the option_count check value 1
     for row in 0..CELL_SIZE {
         if option_count[row] == 1 {
@@ -490,7 +503,7 @@ fn solver_next_step(row_col_square: &dyn RowColSquare) {
             }
         }
     }
-
+    
     // Show the results on the terminal
     print!("{:10} ", row_col_square.get_id());
     for n in 0..CELL_SIZE {
