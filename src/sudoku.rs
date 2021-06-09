@@ -410,7 +410,7 @@ impl SudokuBoard {
         self.init_cell( 8, 5,  8);
     }
 
-    fn init_cell( &self, r:usize , c:usize, v:usize){
+    pub fn init_cell( &self, r:usize , c:usize, v:usize){
         let cell = &self.rows[r].cells[c];
         let refcell = &*cell;
         refcell.set_init_value(v);

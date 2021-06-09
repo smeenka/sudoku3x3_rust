@@ -37,7 +37,7 @@ impl AppState {
    pub fn new() -> AppState {
         let  mut board = SudokuBoard::new();
         let bref = board.wire();
-        bref.init();
+        //bref.init();
         AppState {
             // The number displayed. Generally a valid float.
             message: "Starting sudodku solver".to_string(),

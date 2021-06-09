@@ -6,6 +6,8 @@ use druid::{
     theme
 };
 use druid::widget::{CrossAxisAlignment, Flex, Label, List, Painter, Button};
+#[macro_use]
+extern crate ini;
 
 use sudoku3x3::{
     controller::{SudokuController, },
@@ -37,7 +39,7 @@ fn ui_builder(board:Arc<SudokuBoard>) -> impl Widget<AppState> {
         .with_spacer(5.0)
         .with_child(ui_build_statusline() )
         .with_spacer(5.0)
-        .controller(SudokuController)
+        .controller(SudokuController {file:Option::None})
 } // ui_builder
 
 fn ui_build_menuitems() -> impl Widget<AppState> {
