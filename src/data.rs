@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::{Arc};
 use crate::sudoku::{SudokuBoard, Row, RcSudokuCell };
 
@@ -9,7 +8,9 @@ use druid::{
 pub const COMMAND_STEP: Selector<String>= Selector::new("sudoku.step");
 pub const COMMAND_SOLVE: Selector<String> = Selector::new("sudoku.solve");
 pub const COMMAND_INIT: Selector<String> = Selector::new("sudoku.init");
+pub const COMMAND_SELECT: Selector<String> = Selector::new("sudoku.select");
 pub const COMMAND_SLOWMOTION: Selector<String> = Selector::new("sudoku.slowmotion");
+pub const COMMAND_NUMBER: Selector<(RcSudokuCell, usize)> = Selector::new("sudoku.number");
 
 pub const HEX_DIGITS:[char;CELL_SIZE] = ['1','2','3','4','5','6','7','8','9'];
 
@@ -19,11 +20,17 @@ pub const CELL_COL:  usize = 9;
 pub const CELL_COUNT: usize = CELL_ROW * CELL_COL;
 
 
+#[derive(Clone, Data, Lens)]
+pub struct SelectState {
+    selected: String,
+    pub board_list:Arc<Vec<String>>,
+}
+
 
 #[derive(Clone, Data, Lens)]
 pub struct AppState {
     /// The number displayed. Generally a valid float.
-    message: String,
+    pub message: String,
     steps: usize,
     steps_s: String,
     start_count:usize,
@@ -31,16 +38,16 @@ pub struct AppState {
     curr_count_s:String,
     solved: bool,
     pub board: Arc<SudokuBoard>,
+    pub select_window:SelectState
 }
 
 impl AppState {
    pub fn new() -> AppState {
         let  mut board = SudokuBoard::new();
-        let bref = board.wire();
-        //bref.init();
+        board.wire();
         AppState {
             // The number displayed. Generally a valid float.
-            message: "Starting sudodku solver".to_string(),
+            message: "Select a board".to_string(),
             steps: 0,
             steps_s: "0".to_string(),
             start_count: 0,
@@ -48,28 +55,40 @@ impl AppState {
             curr_count_s:"0".to_string(),
             solved: false,
 
-            board: Arc::new(board)
+            board: Arc::new(board),
+            select_window: SelectState {
+                selected:"none".into(),
+                board_list: Arc::new(vec!["boardA".into(), "boardB".into(),"boardC".into()]),
+            }
+
         }
     }
-    pub const lens_rows: ArcRowLens = ArcRowLens;
-    pub const lens_cells: ArcCellLens = ArcCellLens;
+    //pub const lens_rows: ArcRowLens = ArcRowLens;
+    //pub const lens_cells: ArcCellLens = ArcCellLens;
 
     pub fn do_step(&mut self) {
         self.steps += 1;
         self.steps_s = format!("{}", self.steps);
         let board = &*self.board;
         board.resolve_step();
-        self.curr_count_s= format!("now:{}", board.count_solved(false));
         board.show();
     }    
     pub fn do_restart(&mut self) {
         let board = &*self.board;
         self.steps = 0;
         self.steps_s = "0".to_string();
-        self.start_count = 0;
-        self.start_count_s= format!("start:{}", board.count_solved(true));
-        self.curr_count_s = self.start_count_s.clone();
-        //self.board.deref().init();
+        board.reset();
+    }
+    pub fn count_initial(&mut self) {
+        self.count_current();
+        let board = &*self.board;
+        self.start_count = board.count_solved(true);
+        self.start_count_s= format!("{}", self.start_count);
+
+    }    
+    pub fn count_current(&mut self) {
+        let board = &*self.board;
+        self.curr_count_s= format!("{}", board.count_solved(false));
     }    
 }
 

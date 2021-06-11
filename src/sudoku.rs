@@ -5,8 +5,7 @@ use druid::{Data, Lens};
 
 use crate::data::*;
 
-const MASK_VALUES:[usize;CELL_SIZE] = [0xFFFE, 0xFFFD,0xFFFB,0xFFF7,0xFFEF,0xFFDF,0xFFBF,0xFF7F,0xFEFF ] ;
-
+const CELL_RESET_MASK:usize = 0x1FF; 
 
 #[derive(Clone)]
 pub enum CellActor{
@@ -19,8 +18,9 @@ pub enum CellActor{
 #[allow(dead_code)]
 #[derive(Clone)]
 pub enum CellState{
-    Solved(usize, CellActor),
-    UnSolved(usize),
+    Solved(usize, CellActor),   // uzize contains the positive bitmask for the resolved. There can be only one 1 in the mask
+                                // count_ones == 1  0b001 == 1, 0b0010 == 2 0b01000 = 3 etc
+    UnSolved(usize),            // usize contains the bitmask 1 means not yet resolved, 0 means resolved
 }
 
 #[derive(Clone)]
@@ -43,7 +43,7 @@ impl SudokuCell {
     pub fn get_value(&self) -> String {
         // dereference the Rc into the CellState
         match self.value {
-            CellState::Solved(v,_) => v.to_string(),
+            CellState::Solved(v,_) => format!("{}",v.trailing_zeros() + 1 ),
             CellState::UnSolved(_) => String::from("-"),
         }
     }
@@ -52,16 +52,10 @@ impl SudokuCell {
      *  the returned value is &(1<<3) = 0xFFFFF7 
      */
     pub fn get_resolved_mask(&self) -> usize {
-        // zero bits in the mask indicate resolved cells, one bits are unresolved cells
+        // a 1 bit in the mask indicate a resolved cell, one bits are unresolved cells
         match self.value {
-            CellState::Solved(v,_) =>   {
-                //println!("{}",v);
-                if v > 0 { ! (1<< (v-1))  } else {
-                    println!{"Somthing wrong with value on row {} col {} value {} " , self.row,self.col,v};
-                    !0
-                }
-            },
-            _ => !0,
+            CellState::Solved(v,_) => v, 
+            _                      => 0,
         }
     }
     /**
@@ -70,15 +64,8 @@ impl SudokuCell {
      */
     pub fn get_unresolved_mask(&self) -> usize {
         match self.value {
-            CellState::Solved(v,_) =>   {
-                //println!("{}",v);
-                if v > 0 { !(1<< (v-1)) } else {
-                    println!{"Somthing wrong with value on row {} col {} value {} " , self.row,self.col,v};
-                    !0
-                }
-            },
-            CellState::UnSolved(n) =>  n,
-            _ => 0,
+            CellState::Solved(v,_) =>  v, 
+            CellState::UnSolved(n) =>  n, 
         }
     }
     pub fn substract(&mut self, mask:usize)  {
@@ -87,18 +74,12 @@ impl SudokuCell {
         match self.value {
             CellState::Solved(_v,_) => (),
             CellState::UnSolved(n) => {
-                let new_mask = n & mask;
-                 
+                let inverted = !mask;
+                let new_mask = n & inverted;
                 if new_mask.count_ones() == 1 {
-                    let mut cv = 0;
-                    for n in 0 .. (CELL_SIZE ) {
-                        if 1 << n  == new_mask {
-                            cv = n + 1;
-                            break;
-                        }
-                    };  
-                    self.message = format! ("solved{} ", cv);
-                    newvalue = CellState::Solved( cv, CellActor::Resolved);  
+                    self.message = format! ("solved{} ", new_mask.trailing_zeros() + 1);
+                    //println!("solved{} ", new_mask.trailing_zeros() + 1);
+                    newvalue = CellState::Solved( new_mask, CellActor::Resolved);  
                 } else { 
                     if n != new_mask {
                         self.message = format! ("new mask{:3x} ", new_mask);
@@ -106,12 +87,14 @@ impl SudokuCell {
                     newvalue = CellState::UnSolved( new_mask);
                 }
             },
-            _ => (),
         };
         self.value = newvalue;
     }
     pub fn set_init_value(&mut self, v:usize)  {
-        self.value = CellState::Solved(v, CellActor::StartValue); 
+        self.value = CellState::Solved( 1 << (v - 1) , CellActor::StartValue); 
+    } 
+    pub fn reset(&mut self)  {
+        self.value = CellState::UnSolved(CELL_RESET_MASK); 
     } 
 
     /**
@@ -193,6 +176,9 @@ impl RcSudokuCell {
     pub fn count_solved(&self, intitial:bool ) -> usize{
         self.cell.borrow().count_solved(intitial )
     }
+    pub fn reset(&self)  {
+        self.cell.borrow_mut().reset();
+    }
 }
 /**
  * AllCells is the owner of the sudoku refcells. All rows, cols or squares  have a copy of the Rc of the RcSudokuCell
@@ -214,6 +200,12 @@ impl AllCells {
             }
         }
         AllCells{ cells:cells}
+    }
+    // note the the self is immutable!
+    pub fn reset (&self) {
+        for i in 0 .. CELL_ROW  * CELL_COL  {
+            self.cells[i].reset();
+        }
     }
 }
 
@@ -329,7 +321,6 @@ pub struct SudokuBoard{
     pub cols: Vec<Col>,
     #[data(ignore)]
     pub squares: Vec<Square>,
-    pub step:usize,
 }
 
 
@@ -358,8 +349,10 @@ impl SudokuBoard {
                     };
                     sq   
                   },
-            step: 0,
         }        
+    }
+    pub fn reset(&self){
+        self.allcells.reset();
     }
 
     // replace all dummy rc's to the actual reference
@@ -397,6 +390,7 @@ impl SudokuBoard {
 -------------
 */    
     pub fn init(& self){
+
         self.init_cell( 1, 1,  7);
         self.init_cell( 1, 7,  9);
         self.init_cell( 2, 0,  5);
@@ -466,12 +460,13 @@ impl SudokuBoard {
 /********************************************************************************************************** */
 /** Solver logica  */
 fn solver_next_step(row_col_square: &dyn RowColSquare) {
-    let mut mask = 0xFFFF;
-    // Step 1 get the resolved mask for all cells. For each resolved cell the bit is 0, else 1
+    let mut mask = 0;
+    // Step 1 get the resolved mask for all cells. A 1 on a bitpos means resolved.
     let cells = row_col_square.get_cells();
     for n in 0..CELL_SIZE {
-        mask &= cells[n].get_resolved_mask();
+        mask |= cells[n].get_resolved_mask();
     }
+    // the mask does contain for each resolved cell a 1
     // Substract the already resolved values from the array of possible values. 
     // if only one bit is left the function will mark the cell as resolved
     for n in 0..CELL_SIZE {
@@ -491,7 +486,7 @@ fn solver_next_step(row_col_square: &dyn RowColSquare) {
             mask = mask >> 1;
         }
     }
-    
+    /*
     // for each position in the option_count check value 1
     for row in 0..CELL_SIZE {
         if option_count[row] == 1 {
@@ -503,7 +498,7 @@ fn solver_next_step(row_col_square: &dyn RowColSquare) {
             }
         }
     }
-    
+    */
     // Show the results on the terminal
     print!("{:10} ", row_col_square.get_id());
     for n in 0..CELL_SIZE {
