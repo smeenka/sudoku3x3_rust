@@ -1,14 +1,18 @@
 use std::sync::{Arc};
+use std::vec::Vec;
 use crate::sudoku::{SudokuBoard, Row, RcSudokuCell };
 
-use druid::{
-    Selector, Lens, Data
+use druid::im;
+use druid::widget::prelude::*;
+use druid::{ 
+    Selector, Lens, Data, 
 };
 
 pub const COMMAND_STEP: Selector<String>= Selector::new("sudoku.step");
 pub const COMMAND_SOLVE: Selector<String> = Selector::new("sudoku.solve");
 pub const COMMAND_INIT: Selector<String> = Selector::new("sudoku.init");
 pub const COMMAND_SELECT: Selector<String> = Selector::new("sudoku.select");
+pub const COMMAND_SELECTED: Selector<String> = Selector::new("sudoku.selected");
 pub const COMMAND_SLOWMOTION: Selector<String> = Selector::new("sudoku.slowmotion");
 pub const COMMAND_NUMBER: Selector<(RcSudokuCell, usize)> = Selector::new("sudoku.number");
 
@@ -23,7 +27,8 @@ pub const CELL_COUNT: usize = CELL_ROW * CELL_COL;
 #[derive(Clone, Data, Lens)]
 pub struct SelectState {
     selected: String,
-    pub board_list:Arc<Vec<String>>,
+   
+    //pub board_list:im::Vec<String>
 }
 
 
@@ -37,8 +42,12 @@ pub struct AppState {
     start_count_s:String,
     curr_count_s:String,
     solved: bool,
+    pub which: bool,
     pub board: Arc<SudokuBoard>,
-    pub select_window:SelectState
+    //pub select_window:SelectState,
+    
+    pub board_list:im::Vector<String>,
+    pub selected: String,
 }
 
 impl AppState {
@@ -54,12 +63,12 @@ impl AppState {
             start_count_s:"0".to_string(),
             curr_count_s:"0".to_string(),
             solved: false,
-
+            which :true,
             board: Arc::new(board),
-            select_window: SelectState {
-                selected:"none".into(),
-                board_list: Arc::new(vec!["boardA".into(), "boardB".into(),"boardC".into()]),
-            }
+            //select_window: SelectState {
+            selected:"none".into(),
+            board_list: im::vector![],
+            //}
 
         }
     }
@@ -72,12 +81,14 @@ impl AppState {
         let board = &*self.board;
         board.resolve_step();
         board.show();
+        self.which = false;
     }    
     pub fn do_restart(&mut self) {
         let board = &*self.board;
         self.steps = 0;
         self.steps_s = "0".to_string();
         board.reset();
+        self.which =false;
     }
     pub fn count_initial(&mut self) {
         self.count_current();

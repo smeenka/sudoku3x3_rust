@@ -8,8 +8,13 @@ edition = "2018"
 
 [dependencies]
 ini = { version = "1.3.0" }
-druid = { version = "0.7.0" }
+druid = { version = "0.7.0", features = ["im"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 uuid = { version = "0.8.1", features = ["serde", "v4"] }
+im = { version = "15.0.0", optional = true }
+
+[package.metadata.docs.rs]
+features = ["im"]
+
 

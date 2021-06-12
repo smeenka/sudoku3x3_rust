@@ -70,7 +70,6 @@ impl SudokuCell {
     }
     pub fn substract(&mut self, mask:usize)  {
         // substract the mask from the bits in this cell. If only one bit left, mark as solved
-        let mut newvalue = self.value.clone();
         match self.value {
             CellState::Solved(_v,_) => (),
             CellState::UnSolved(n) => {
@@ -78,17 +77,16 @@ impl SudokuCell {
                 let new_mask = n & inverted;
                 if new_mask.count_ones() == 1 {
                     self.message = format! ("solved{} ", new_mask.trailing_zeros() + 1);
-                    //println!("solved{} ", new_mask.trailing_zeros() + 1);
-                    newvalue = CellState::Solved( new_mask, CellActor::Resolved);  
+                    println!("solved in substract row {} col {} v{} ", self.row,self.col,new_mask.trailing_zeros() + 1);
+                    self.value = CellState::Solved( new_mask, CellActor::Resolved);  
                 } else { 
                     if n != new_mask {
                         self.message = format! ("new mask{:3x} ", new_mask);
+                        self.value = CellState::UnSolved( new_mask);
                     }
-                    newvalue = CellState::UnSolved( new_mask);
                 }
             },
         };
-        self.value = newvalue;
     }
     pub fn set_init_value(&mut self, v:usize)  {
         self.value = CellState::Solved( 1 << (v - 1) , CellActor::StartValue); 
@@ -101,12 +99,12 @@ impl SudokuCell {
      * Set the solved value, but only if the current mask is equal to the incoming value
      * return true if the value is set (masks are equal, false if not set)
      */
-    pub fn set_solved_value(&mut self, mask:usize, v:usize) -> bool  {
+    pub fn set_solved_value(&mut self, mask:usize) -> bool  {
         match self.value {
             CellState::UnSolved(n) => {
-                if n & mask  == mask {
-                    self.value = CellState::Solved(v, CellActor::Resolved);
-                    println!("resolved: {} " , v);
+                if (n & mask)  == mask {
+                    self.value = CellState::Solved(mask, CellActor::Resolved);
+                    println!("resolved: {} " , mask);
                     return true;
                 }
                 false
@@ -153,9 +151,9 @@ impl RcSudokuCell {
         // dereference the Rc into the CellState
         self.cell.borrow_mut().set_init_value(v);
     } 
-    pub fn set_solved_value(&self, mask:usize, v:usize ) -> bool  {
+    pub fn set_solved_value(&self, mask:usize ) -> bool  {
         // dereference the Rc into the CellState
-        self.cell.borrow_mut().set_solved_value(mask, v)
+        self.cell.borrow_mut().set_solved_value(mask)
     } 
     pub fn get_state(&self) -> CellState {
         // dereference the Rc 
@@ -479,26 +477,27 @@ fn solver_next_step(row_col_square: &dyn RowColSquare) {
         let cell = &cells[row];
         let mut mask = cell.get_unresolved_mask();
         for bitpos in 0..CELL_SIZE {
-            // bit bit is one, there is a possible location found for this value
+            // if bit is one, there is a possible location found for this value
             if (mask & 1) == 1 {
                 option_count[bitpos] += 1
             }
             mask = mask >> 1;
         }
     }
-    /*
+  /*  
     // for each position in the option_count check value 1
     for row in 0..CELL_SIZE {
         if option_count[row] == 1 {
             // again iterate over the cells and find the cell with the current mask
             for c in 0..CELL_SIZE {
-                if cells[c].set_solved_value(1<<row, row +1) {
+                if cells[c].set_solved_value(1<<row) {
+                    println!("solved due to single val:{}, index{}", row+1, c+1);
                     break;
                 }
             }
         }
     }
-    */
+   */ 
     // Show the results on the terminal
     print!("{:10} ", row_col_square.get_id());
     for n in 0..CELL_SIZE {

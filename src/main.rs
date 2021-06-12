@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use druid::widget::prelude::*;
 use druid::{
-    AppLauncher, Color, Data, LensExt,  RenderContext, Widget, WidgetExt,
+    AppLauncher, Color, Data,  RenderContext, Widget, WidgetExt,
     WindowDesc, Env, PaintCtx, LocalizedString, MenuItem, MenuDesc, ContextMenu,
-    theme
+    theme,
 };
-use druid::widget::{Flex, Label, Painter, Button};
+use druid::widget::{Either,Flex, Label, Painter, Button, TextBox, List};
 use druid::piet::{FontFamily, Text, TextLayoutBuilder};
 
 extern crate ini;
@@ -36,7 +36,21 @@ fn ui_builder(board:Arc<SudokuBoard>) -> impl Widget<AppState> {
         .with_spacer(5.0)
         .with_child(ui_build_menuitems() )
         .with_spacer(5.0)
-        .with_flex_child( ui_build_board(&*board) , 1.0  )
+        .with_flex_child(
+            Either::new(
+                |data, _env| data.which,
+                List::new(|| {
+                    Label::new(|data: &String, _: &_| format!("Board: {}", data))
+                        .center()
+                        .background(Color::hlc(230.0, 50.0, 50.0))
+                        .expand_width()
+                        .padding(5.0)
+                        .on_click(| ctx, data, _env| 
+                            ctx.submit_command(COMMAND_SELECTED.with( data.to_string() ) ) ) 
+                })
+                .lens(AppState::board_list), 
+                ui_build_board(&*board)
+            ),10.0)
         .with_spacer(5.0)
         .with_child(ui_build_statusline() )
         .with_spacer(5.0)
@@ -45,6 +59,12 @@ fn ui_builder(board:Arc<SudokuBoard>) -> impl Widget<AppState> {
 
 fn ui_build_menuitems() -> impl Widget<AppState> {
     Flex::row()
+    .with_child(TextBox::new()
+    .lens(AppState::selected)
+        .on_click(|ctx, _data, _env| 
+            ctx.submit_command(COMMAND_SELECT.with( "".to_string() )  ) 
+        )   
+    )
     .with_child(Button::new("Select board").on_click(|ctx, _data, _env| 
         ctx.submit_command(COMMAND_SELECT.with( "".to_string() )  ) )   
     )
@@ -65,7 +85,18 @@ fn ui_build_menuitems() -> impl Widget<AppState> {
     )  
     .with_flex_spacer(1.0)
 }
-
+/*
+fn build_autocomplete<T:Data> (app_data:&AppState) ->impl Widget<T>{
+    List::new(|| {
+        Label::new(|data: &String, _: &_| format!("Board: {}", data))
+            .center()
+            .background(Color::hlc(230.0, 50.0, 50.0))
+            .fix_height(200.0)
+            .expand_width()
+    })
+    .lens(AppState::board_list)
+}
+*/
 fn ui_build_board<T:Data> (board:&SudokuBoard) -> impl Widget<T> where Flex<AppState>: druid::Widget<T>{
     let mut column = Flex::column();
 
@@ -274,7 +305,7 @@ fn ui_build_statusline() -> impl Widget<AppState> {
     .with_spacer(5.0)
     .with_child( Label::new(|data: &String, _env: &_| data.clone())
         .with_text_size(16.0)
-        .lens(AppState::select_window.then(SelectState::selected))
+        .lens(AppState::selected)
         .padding(1.0)
     )
     .with_flex_spacer(10.0)

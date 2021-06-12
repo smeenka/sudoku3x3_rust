@@ -46,6 +46,10 @@ impl<W: Widget<AppState>> Controller<AppState, W> for SudokuController {
 
 
 fn handle_commands(cmd: &Command, data: &mut AppState) {
+    if data.board_list.is_empty() {
+        load_file(data);
+        data.which = true;
+    }
     if  cmd.is(COMMAND_INIT)
     {
         let sel = cmd.get(COMMAND_INIT);
@@ -58,9 +62,17 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
     {
         let sel = cmd.get(COMMAND_SELECT);
         println!("Received command Select with id  {:?}", sel   );
+        data.which = true;
+    } else 
+    if  cmd.is(COMMAND_SELECTED)
+    {
+        let sel = cmd.get(COMMAND_SELECTED);
+        println!("Received command Select with id  {:?}", sel   );
         data.do_restart();
-        load_file(&*data.board);
+        data.selected = sel.unwrap().to_string();
+        select_board(data);     
         data.count_initial();
+        data.which = false;
     } else 
     if  cmd.is(COMMAND_STEP)
     {
@@ -69,6 +81,7 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
         data.do_step();
         data.count_current();
         data.message = "Stepping ..".into();
+        data.which = false;
 
     } else 
     if  cmd.is(COMMAND_SLOWMOTION)
@@ -91,12 +104,23 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
     } 
 }
 
-fn load_file(data: &SudokuBoard)  {             
+pub fn load_file(data: &mut AppState)  {
+    let board = & *data.board;             
     // Open the file in read-only mode (ignoring errors)
     let map = ini!("data/sudoku.ini");
 
-    let sudoku1 = map.get(&"sudoku1".to_string()).unwrap();
-    for (key, value) in sudoku1 {
+    for (key, _value) in &map {
+        data.board_list.push_back(key.to_string());
+    }
+    data.selected = data.board_list.get(0).unwrap().to_string();
+}
+fn select_board(data: &mut AppState){
+    // Open the file in read-only mode (ignoring errors)
+    let map = ini!("data/sudoku.ini");
+    let board = & *data.board;             
+    let sudoku = map.get(&data.selected).unwrap();
+
+    for (key, value) in sudoku {
         if key.starts_with("row"){
             let rowc = key.chars().nth(3).unwrap();
             let row = rowc.to_digit(10).unwrap() - 1; 
@@ -104,12 +128,10 @@ fn load_file(data: &SudokuBoard)  {
                 let valc = value.as_ref().unwrap().chars().nth(col).unwrap();
                 if '-' != valc {
                     let v = valc.to_digit(16).unwrap(); 
-                    data.init_cell(row as usize, col, v as usize);     
+                    board.init_cell(row as usize, col, v as usize);     
                 }
             } 
         }
-        
-
     }
 }
 
