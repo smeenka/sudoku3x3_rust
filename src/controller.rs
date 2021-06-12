@@ -24,7 +24,7 @@ impl<W: Widget<AppState>> Controller<AppState, W> for SudokuController {
             //    ctx.set_handled();
             //},
             Event::MouseDown(me) => {
-                println!("Mouse down anykey {:?}" ,me.pos );
+                //println!("Mouse down anykey {:?}" ,me.pos );
             }            
             Event::KeyUp(ke)  => {
                 println!("Key Up {:?}" ,ke.key );

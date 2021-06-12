@@ -2,7 +2,6 @@ use std::rc::{Rc};
 use std::cell::{RefCell};
 //use std::sync::Arc;
 use druid::{Data, Lens};
-
 use crate::data::*;
 
 const CELL_RESET_MASK:usize = 0x1FF; 
@@ -23,12 +22,11 @@ pub enum CellState{
     UnSolved(usize),            // usize contains the bitmask 1 means not yet resolved, 0 means resolved
 }
 
-#[derive(Clone)]
+#[derive(Clone )]
 pub struct SudokuCell {
     pub value: CellState,
     row:usize,
     col:usize,
-    message:String
 }
 
 impl SudokuCell {
@@ -37,7 +35,6 @@ impl SudokuCell {
            value: CellState::UnSolved(0x1FF),
            row:r,
            col:c,
-           message:"init".to_string()
         }
     }
     pub fn get_value(&self) -> String {
@@ -46,6 +43,16 @@ impl SudokuCell {
             CellState::Solved(v,_) => format!("{}",v.trailing_zeros() + 1 ),
             CellState::UnSolved(_) => String::from("-"),
         }
+    }
+    pub fn as_string(&self) -> String {
+        // dereference the Rc into the CellState
+        match self.value {
+            CellState::Solved(v,_) => format!("{}",v.trailing_zeros() + 1 ),
+            CellState::UnSolved(_) => String::from("-"),
+        }
+    }
+    fn get_pos(&self) -> (usize,usize) {
+        (self.row +1, self.col +1)
     }
     /**
      *  If this cell is resolved return the inverse of the bitmask. So if the value is 4
@@ -76,12 +83,10 @@ impl SudokuCell {
                 let inverted = !mask;
                 let new_mask = n & inverted;
                 if new_mask.count_ones() == 1 {
-                    self.message = format! ("solved{} ", new_mask.trailing_zeros() + 1);
-                    println!("solved in substract row {} col {} v{} ", self.row,self.col,new_mask.trailing_zeros() + 1);
                     self.value = CellState::Solved( new_mask, CellActor::Resolved);  
+                    println!("Solved in substract cell {:?} value {} ",  self.get_pos(), self.as_string() );
                 } else { 
                     if n != new_mask {
-                        self.message = format! ("new mask{:3x} ", new_mask);
                         self.value = CellState::UnSolved( new_mask);
                     }
                 }
@@ -104,7 +109,7 @@ impl SudokuCell {
             CellState::UnSolved(n) => {
                 if (n & mask)  == mask {
                     self.value = CellState::Solved(mask, CellActor::Resolved);
-                    println!("resolved: {} " , mask);
+                    println!("Resolved cell {:?} value {}", self.get_pos(), self.as_string());
                     return true;
                 }
                 false
@@ -133,7 +138,7 @@ impl SudokuCell {
  * The Rc is easy clonable and makes more than one reference possible to the sudoku cell
  * The RefCell is for inner mutability
  */
-#[derive(Clone, Lens, Data)]
+#[derive(Clone, Lens, Data )]
 pub struct RcSudokuCell {
     cell: Rc<RefCell<SudokuCell>>
 }
@@ -168,14 +173,17 @@ impl RcSudokuCell {
     pub fn substract(&self, mask:usize)  {
         self.cell.borrow_mut().substract(mask);
     }
-    pub fn get_message(&self)  -> String{
-        self.cell.borrow().message.clone()
-    }
     pub fn count_solved(&self, intitial:bool ) -> usize{
         self.cell.borrow().count_solved(intitial )
     }
     pub fn reset(&self)  {
         self.cell.borrow_mut().reset();
+    }
+    pub fn get_pos(&self) -> (usize,usize) {
+        self.cell.borrow().get_pos() 
+    }
+    pub fn as_string(&self) -> String {
+        self.cell.borrow().as_string() 
     }
 }
 /**
@@ -216,7 +224,6 @@ pub trait RowColSquare  {
 pub struct Row {
     #[data(ignore)]
     pub cells:  Vec<RcSudokuCell>,
-    message: String,
     id: String,
 }
 
@@ -232,14 +239,13 @@ impl RowColSquare for Row {
 
 impl Row {
     fn new (i:usize)-> Row {
-        Row{ cells:vec![], message: "unwired".to_string(), id:format!("Row: {}", i)  }
+        Row{ cells:vec![], id:format!("Row: {}", i + 1)  }
     }
     pub fn wire(&mut self, r:usize,  allcells: &AllCells) {
         let startindex = r * CELL_SIZE;
         for n in 0..CELL_SIZE {
             let allcell  = &allcells.cells[startindex + n]; 
             self.cells.push(RcSudokuCell::new( &allcell.cell ));
-            self.message = "Wired".to_string();
         }
     }
 }
@@ -248,7 +254,6 @@ impl Row {
 pub struct Col {
     #[data(ignore)]
     cells:  Vec<RcSudokuCell>,
-    message:String,
     id: String,
 }
 impl RowColSquare for Col {
@@ -262,14 +267,13 @@ impl RowColSquare for Col {
 
 impl Col {
     fn new (i:usize)-> Col {
-        Col{ cells:vec![], message: "unwired".to_string(), id:format!("Col: {}", i)  }
+        Col{ cells:vec![], id:format!("Col: {}", i + 1)  }
     }
     pub fn wire(&mut self, c:usize,  allcells: &AllCells) {
         let startindex = c;
         for n in 0..CELL_SIZE {
             let allcell  = &allcells.cells[startindex +  n*CELL_SIZE]; 
             self.cells.push(RcSudokuCell::new( &allcell.cell ));
-            self.message = "Wired".to_string();
         }
     }
 }
@@ -278,7 +282,6 @@ impl Col {
 pub struct Square {
     #[data(ignore)]
     cells:  Vec<RcSudokuCell>,
-    message: String,
     id: String,
 
 }
@@ -293,7 +296,7 @@ impl RowColSquare for Square {
 
 impl Square {
     fn new (i:usize)-> Square {
-        Square{ cells:vec![], message: "unwired".to_string(), id:format!("Square: {}", i)  }
+        Square{ cells:vec![],  id:format!("Square: {}", i + 1)  }
     }
     pub fn wire(&mut self, r:usize,  c:usize,  allcells: &AllCells) {
         for n in 0..CELL_SIZE {
@@ -302,22 +305,16 @@ impl Square {
             let alli = ri + ci;
             let allcell  = &allcells.cells[alli]; 
             self.cells.push(RcSudokuCell::new( &allcell.cell ));
-            self.message = "Wired".to_string();
         }
     }
 }
 
 
-#[derive(Clone, Data, Lens )]
+#[derive(Clone,  Lens )]
 pub struct SudokuBoard{
-    #[data(ignore)]
     allcells:AllCells,
-    pub message: String,
-    #[data(ignore)]
     pub rows: Vec<Row>,
-    #[data(ignore)]
     pub cols: Vec<Col>,
-    #[data(ignore)]
     pub squares: Vec<Square>,
 }
 
@@ -328,7 +325,6 @@ impl SudokuBoard {
 
         SudokuBoard {
             allcells:AllCells::new(),
-            message: String::from("initializing sudoku board instance"),
             rows: { let mut  rws  = vec![];
                     for i in 0 .. CELL_ROW { 
                         rws.push( Row::new(i) ) ;
@@ -454,9 +450,26 @@ impl SudokuBoard {
             solver_next_step( &self.squares[r]);
         }
     }
+    pub fn check_board( &self) {
+        for r in 0..CELL_ROW {
+            println!("---------------index {}", r);
+            print_layout( &self.rows[r]);
+            print_layout( &self.cols[r]);
+            print_layout( &self.squares[r]);
+        }
+    }
 }
 /********************************************************************************************************** */
 /** Solver logica  */
+
+fn print_layout(row_col_square: &dyn RowColSquare) {
+    for cell in row_col_square.get_cells() {
+        print!(" {:?} - ", cell.get_pos());
+    }
+    println!("");
+}
+
+
 fn solver_next_step(row_col_square: &dyn RowColSquare) {
     let mut mask = 0;
     // Step 1 get the resolved mask for all cells. A 1 on a bitpos means resolved.
@@ -484,20 +497,28 @@ fn solver_next_step(row_col_square: &dyn RowColSquare) {
             mask = mask >> 1;
         }
     }
-  /*  
+    
     // for each position in the option_count check value 1
     for row in 0..CELL_SIZE {
         if option_count[row] == 1 {
+            let mask = 1 << row;
             // again iterate over the cells and find the cell with the current mask
             for c in 0..CELL_SIZE {
-                if cells[c].set_solved_value(1<<row) {
-                    println!("solved due to single val:{}, index{}", row+1, c+1);
-                    break;
+                let cell = &cells[c];
+                match cell.get_state() {
+                    CellState::UnSolved(n) => {
+                        if n & mask == mask {
+                            println!("Would advice for cell {:?} value {}", cell.get_pos(), row +1);
+                            cell.set_solved_value(mask);
+                            break;
+                        }
+                    }
+                    _ => (),
                 }
             }
         }
     }
-   */ 
+    
     // Show the results on the terminal
     print!("{:10} ", row_col_square.get_id());
     for n in 0..CELL_SIZE {
@@ -531,6 +552,13 @@ mod tests {
             bref.resolve_step();
             bref.show();
         }
+    }
+    #[test]
+    fn test_check_board() { 
+        let  mut board = SudokuBoard::new();
+        let bref = board.wire();
+        bref.init();
+        bref.check_board()
     }
 }
 

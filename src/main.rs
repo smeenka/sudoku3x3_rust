@@ -228,8 +228,8 @@ impl Widget<AppState> for CellWidget {
                     tekst.push(' ');
                     shifted = shifted >> 1;
                     match c {
-                        2 => tekst.push('\n'),
-                        5 => tekst.push('\n'),
+                        2 => tekst += "               \n" ,
+                        5 => tekst += "               \n",
                         _ => ()
                     }
                 };

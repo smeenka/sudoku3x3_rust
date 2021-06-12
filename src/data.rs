@@ -80,7 +80,7 @@ impl AppState {
         self.steps_s = format!("{}", self.steps);
         let board = &*self.board;
         board.resolve_step();
-        board.show();
+        //board.show();
         self.which = false;
     }    
     pub fn do_restart(&mut self) {
