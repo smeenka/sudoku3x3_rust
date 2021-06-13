@@ -88,8 +88,8 @@ impl SudokuCell {
                             self.value = CellState::UnSolved( new_mask);
                         }
                     },
-                    CellState::Twin2(_, _) => {
-                        println!("Testing twin my index {} my twin other {} index twins  index {}", self.idx, other_index, other,idx);
+                    _ => {
+                        println!("Testing twin my index {} my twin other {} index twins  index {}", self.idx, other_idx, other.idx);
                         if other_idx == other.idx {
                             twin_mask = my_twin_mask;
                         }
