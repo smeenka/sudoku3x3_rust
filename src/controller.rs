@@ -2,7 +2,7 @@ use druid::{
     widget::{Controller,  },
     Env, Event, EventCtx,  Widget,  Command, 
 };
-use crate::sudoku::{SudokuBoard};
+//use crate::sudoku::{SudokuBoard};
 use ini::ini;
 
 
@@ -23,12 +23,13 @@ impl<W: Widget<AppState>> Controller<AppState, W> for SudokuController {
             //    println!("Key down:{:?} child: " , k_e  );
             //    ctx.set_handled();
             //},
-            Event::MouseDown(me) => {
+            Event::MouseDown(_me) => {
                 //println!("Mouse down anykey {:?}" ,me.pos );
             }            
-            Event::KeyUp(ke)  => {
-                println!("Key Up {:?}" ,ke.key );
-                ctx.set_handled();
+            Event::KeyDown(ke)  => {
+                println!("Key Down {:?}" ,ke.key );
+                data.autoselect();
+                //ctx.set_handled();
             },
             Event::Command(cmd)  => {
                 handle_commands(cmd, data);
@@ -44,12 +45,9 @@ impl<W: Widget<AppState>> Controller<AppState, W> for SudokuController {
 }
 
 
+//let y: Vec<_> = x.iter().filter(p).collect();
 
 fn handle_commands(cmd: &Command, data: &mut AppState) {
-    if data.board_list.is_empty() {
-        load_file(data);
-        data.which = true;
-    }
     if  cmd.is(COMMAND_INIT)
     {
         let sel = cmd.get(COMMAND_INIT);
@@ -63,6 +61,12 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
         let sel = cmd.get(COMMAND_SELECT);
         println!("Received command Select with id  {:?}", sel   );
         data.which = true;
+    } else 
+    if  cmd.is(COMMAND_AUTOSELECT)
+    {
+        let sel = cmd.get(COMMAND_AUTOSELECT);
+        println!("Received command Select with id  {:?}", sel   );
+        data.autoselect();
     } else 
     if  cmd.is(COMMAND_SELECTED)
     {
@@ -105,18 +109,18 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
 }
 
 pub fn load_file(data: &mut AppState)  {
-    let board = & *data.board;             
     // Open the file in read-only mode (ignoring errors)
-    let map = ini!("data/sudoku.ini");
+    let map = ini!("/data/workspace/rust/apps/sudoku3x3_rust/data/sudoku.ini");
 
     for (key, _value) in &map {
         data.board_list.push_back(key.to_string());
     }
-    data.selected = data.board_list.get(0).unwrap().to_string();
+    data.selected = "".to_string();
+    data.autoselect();
 }
 fn select_board(data: &mut AppState){
     // Open the file in read-only mode (ignoring errors)
-    let map = ini!("data/sudoku.ini");
+    let map = ini!("/data/workspace/rust/apps/sudoku3x3_rust/data/sudoku.ini");
     let board = & *data.board;             
     let sudoku = map.get(&data.selected).unwrap();
 
@@ -134,25 +138,3 @@ fn select_board(data: &mut AppState){
         }
     }
 }
-
-
-    /*   
-    let state:LoadState = LoadState::START;
-    let filename = "data/easy.txt";
-    let file = File::open(filename).unwrap();
-    let reader = BufReader::new(file); 
-    let mut ri = 0;    
-    // Read the file line by line using the lines() iterator from std::io::BufRead.
-    for (index, line) in reader.lines().enumerate() {
-        state = match state {
-            LoadState::START  if line.unwrap().starts_with("start") =>LoadState::LOAD,
-            LoadState::LOAD  if line.unwrap().starts_with("END") =>LoadState::END,
-            LoadState::LOAD  if line.unwrap().starts_with("|") => {
-                data.init_line(&line.unwrap(), ri);
-                ri += 1;
-                LoadState::LOAD
-            },
-            _  => LoadState::END 
-        }
-    }
- */   

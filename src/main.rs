@@ -1,28 +1,22 @@
 use std::sync::Arc;
 use druid::widget::prelude::*;
-use druid::{
-    AppLauncher, Color, Data,  RenderContext, Widget, WidgetExt,
-    WindowDesc, Env, PaintCtx, LocalizedString, MenuItem, MenuDesc, ContextMenu,
-    theme,
-};
-use druid::widget::{Either,Flex, Label, Painter, Button, TextBox, List};
-use druid::piet::{FontFamily, Text, TextLayoutBuilder};
-
+use druid::*;
+use druid::widget::*;
+use druid::piet::*;
 extern crate ini;
-
 use sudoku3x3::{
-    controller::{SudokuController, },
-    sudoku::{SudokuBoard, Row, RcSudokuCell, CellState, CellActor },
+    controller::*,
+    sudoku::*,
     data::*
 };
 
 pub fn main() {
-    let app_state = AppState::new();
+    let mut app_state = AppState::new();
+    load_file(&mut app_state);
     let board = app_state.board.clone();
     let window = WindowDesc::new(move || ui_builder(board))
             .title("Sudoku 3x3")
             .window_size((600.0, 650.0));
-
 
     AppLauncher::with_window(window)
         //.log_to_console()
@@ -39,16 +33,7 @@ fn ui_builder(board:Arc<SudokuBoard>) -> impl Widget<AppState> {
         .with_flex_child(
             Either::new(
                 |data, _env| data.which,
-                List::new(|| {
-                    Label::new(|data: &String, _: &_| format!("Board: {}", data))
-                        .center()
-                        .background(Color::hlc(230.0, 50.0, 50.0))
-                        .expand_width()
-                        .padding(5.0)
-                        .on_click(| ctx, data, _env| 
-                            ctx.submit_command(COMMAND_SELECTED.with( data.to_string() ) ) ) 
-                })
-                .lens(AppState::board_list), 
+                build_autoselect(),
                 ui_build_board(&*board)
             ),10.0)
         .with_spacer(5.0)
@@ -57,17 +42,56 @@ fn ui_builder(board:Arc<SudokuBoard>) -> impl Widget<AppState> {
         .controller(SudokuController {file:Option::None})
 } // ui_builder
 
+fn build_autoselect() -> impl Widget<AppState>{
+    Flex::column()
+    .with_spacer(10.0)
+    .with_child(
+        Flex::row()
+        .with_spacer(10.0)
+        .with_child(
+            Label::new("Filter:")
+            .background(Color::rgb8(50, 10, 10))
+            .fix_height(30.0)
+        )
+        .with_spacer(10.0)
+        .with_child(TextBox::new()
+            .lens(AppState::selected)
+            .on_click(|ctx, _data, _env| 
+                ctx.submit_command(COMMAND_AUTOSELECT.with( "".to_string() )  ) 
+            )
+               
+        )
+        .fix_height(20.0)
+        .align_left()
+    )
+    .with_spacer(10.0)
+    .with_flex_child(
+        Scroll::new(
+            List::new(|| {
+                Label::new(|data: &String, _: &_| format!("{}", data))
+                    .background(Color::rgb8(10, 10, 10))
+                    .expand_width()
+                    .padding(5.0)
+                    .on_click(| ctx, data, _env| 
+                        ctx.submit_command(COMMAND_SELECTED.with( data.to_string() ) ) ) 
+            })
+            .lens(AppState::autoselect_list),
+        ).vertical(),
+        10.0 
+    )
+
+
+}
+
+
+
 fn ui_build_menuitems() -> impl Widget<AppState> {
     Flex::row()
-    .with_child(TextBox::new()
-    .lens(AppState::selected)
-        .on_click(|ctx, _data, _env| 
-            ctx.submit_command(COMMAND_SELECT.with( "".to_string() )  ) 
-        )   
-    )
+    .with_spacer(5.0)
     .with_child(Button::new("Select board").on_click(|ctx, _data, _env| 
         ctx.submit_command(COMMAND_SELECT.with( "".to_string() )  ) )   
     )
+    .with_flex_spacer(1.0)
     .with_child(Button::new("Restart").on_click(|ctx, _data, _env| 
         ctx.submit_command(COMMAND_INIT.with( "".to_string() )  ) )   
     )
@@ -83,7 +107,7 @@ fn ui_build_menuitems() -> impl Widget<AppState> {
     .with_child(Button::new("Solve").on_click(| ctx, _data, _env| 
         ctx.submit_command(COMMAND_SOLVE.with( "".to_string() ) ) ) 
     )  
-    .with_flex_spacer(1.0)
+    .with_spacer(5.0)
 }
 /*
 fn build_autocomplete<T:Data> (app_data:&AppState) ->impl Widget<T>{

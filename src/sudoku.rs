@@ -75,23 +75,28 @@ impl SudokuCell {
             CellState::UnSolved(n) =>  n, 
         }
     }
-    pub fn substract(&mut self, mask:usize)  {
+    // substract bits in in the possible bit masks. If current cell is now resolved return true
+    pub fn substract(&mut self, mask:usize) -> bool  {
         // substract the mask from the bits in this cell. If only one bit left, mark as solved
+        let result =
         match self.value {
-            CellState::Solved(_v,_) => (),
+            CellState::Solved(_v,_) => false,
             CellState::UnSolved(n) => {
                 let inverted = !mask;
                 let new_mask = n & inverted;
                 if new_mask.count_ones() == 1 {
                     self.value = CellState::Solved( new_mask, CellActor::Resolved);  
-                    println!("Solved in substract cell {:?} value {} ",  self.get_pos(), self.as_string() );
+                    println!("Solved in substract cell {:?} value {} my mask {:09b} incoming mask {:09b} ressulting mask {:09b}",  self.get_pos(), self.as_string(), n ,mask, new_mask) ;
+                    true
                 } else { 
                     if n != new_mask {
                         self.value = CellState::UnSolved( new_mask);
                     }
+                    false
                 }
             },
         };
+        result
     }
     pub fn set_init_value(&mut self, v:usize)  {
         self.value = CellState::Solved( 1 << (v - 1) , CellActor::StartValue); 
@@ -170,8 +175,8 @@ impl RcSudokuCell {
     pub fn get_unresolved_mask(&self) -> usize {
         self.cell.borrow().get_unresolved_mask()
     }
-    pub fn substract(&self, mask:usize)  {
-        self.cell.borrow_mut().substract(mask);
+    pub fn substract(&self, mask:usize) -> bool  {
+        self.cell.borrow_mut().substract(mask)
     }
     pub fn count_solved(&self, intitial:bool ) -> usize{
         self.cell.borrow().count_solved(intitial )
@@ -446,7 +451,11 @@ impl SudokuBoard {
     pub fn resolve_step( &self) {
         for r in 0..CELL_ROW {
             solver_next_step( &self.rows[r]);
+        }
+        for r in 0..CELL_ROW {
             solver_next_step( &self.cols[r]);
+        }
+        for r in 0..CELL_ROW {
             solver_next_step( &self.squares[r]);
         }
     }
@@ -474,15 +483,21 @@ fn solver_next_step(row_col_square: &dyn RowColSquare) {
     let mut mask = 0;
     // Step 1 get the resolved mask for all cells. A 1 on a bitpos means resolved.
     let cells = row_col_square.get_cells();
-    for n in 0..CELL_SIZE {
-        mask |= cells[n].get_resolved_mask();
-    }
-    // the mask does contain for each resolved cell a 1
-    // Substract the already resolved values from the array of possible values. 
-    // if only one bit is left the function will mark the cell as resolved
-    for n in 0..CELL_SIZE {
-        cells[n].substract(mask);
-    }
+
+    loop {
+        let mut changed = false;
+        for n in 0..CELL_SIZE {
+            mask |= cells[n].get_resolved_mask();
+        }
+        // the mask does contain for each resolved cell a 1
+        // Substract the already resolved values from the array of possible values. 
+        // if only one bit is left the function will mark the cell as resolved
+        for n in 0..CELL_SIZE {
+            changed = changed || cells[n].substract(mask);
+        }
+        if !changed {break;}
+    } ; 
+
     // count the possible locations  for each value
     let mut option_count  = [0; CELL_SIZE];
 
@@ -509,6 +524,9 @@ fn solver_next_step(row_col_square: &dyn RowColSquare) {
                     CellState::UnSolved(n) => {
                         if n & mask == mask {
                             println!("Would advice for cell {:?} value {}", cell.get_pos(), row +1);
+                            if (7,5) == cell.get_pos() {
+                                println!("bingo");
+                            }
                             cell.set_solved_value(mask);
                             break;
                         }
@@ -518,7 +536,7 @@ fn solver_next_step(row_col_square: &dyn RowColSquare) {
             }
         }
     }
-    
+     
     // Show the results on the terminal
     print!("{:10} ", row_col_square.get_id());
     for n in 0..CELL_SIZE {

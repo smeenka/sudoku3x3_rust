@@ -1,17 +1,15 @@
-use std::sync::{Arc};
+use std::sync::*;
 use std::vec::Vec;
-use crate::sudoku::{SudokuBoard, Row, RcSudokuCell };
-
+use crate::sudoku::*;
+//use std::borrow::Borrow;
 use druid::im;
-use druid::widget::prelude::*;
-use druid::{ 
-    Selector, Lens, Data, 
-};
+use druid::*;
 
 pub const COMMAND_STEP: Selector<String>= Selector::new("sudoku.step");
 pub const COMMAND_SOLVE: Selector<String> = Selector::new("sudoku.solve");
 pub const COMMAND_INIT: Selector<String> = Selector::new("sudoku.init");
 pub const COMMAND_SELECT: Selector<String> = Selector::new("sudoku.select");
+pub const COMMAND_AUTOSELECT: Selector<String> = Selector::new("sudoku.autoselect");
 pub const COMMAND_SELECTED: Selector<String> = Selector::new("sudoku.selected");
 pub const COMMAND_SLOWMOTION: Selector<String> = Selector::new("sudoku.slowmotion");
 pub const COMMAND_NUMBER: Selector<(RcSudokuCell, usize)> = Selector::new("sudoku.number");
@@ -45,8 +43,10 @@ pub struct AppState {
     pub which: bool,
     pub board: Arc<SudokuBoard>,
     //pub select_window:SelectState,
-    
+    #[data(ignore)]
     pub board_list:im::Vector<String>,
+    #[data(ignore)]
+    pub autoselect_list:im::Vector<String>,
     pub selected: String,
 }
 
@@ -66,8 +66,9 @@ impl AppState {
             which :true,
             board: Arc::new(board),
             //select_window: SelectState {
-            selected:"none".into(),
+            selected:"".into(),
             board_list: im::vector![],
+            autoselect_list: im::vector![],
             //}
 
         }
@@ -100,6 +101,17 @@ impl AppState {
     pub fn count_current(&mut self) {
         let board = &*self.board;
         self.curr_count_s= format!("{}", board.count_solved(false));
+    }
+    pub fn autoselect(&mut self) {
+        let listref = &self.board_list;
+        let result:im::Vector<_> = listref
+            .into_iter()
+            .filter(|s| s.contains(&self.selected) )
+            .collect();
+        self.autoselect_list = im::vector![];
+        for s in result {
+            self.autoselect_list.push_back(s.to_string());
+        }
     }    
 }
 
