@@ -261,6 +261,22 @@ impl Widget<AppState> for CellWidget {
                 t_size = 16.0;
                 t_color = Color::rgb8(0xEE, 0x22, 0x22);
             },
+            CellState::Twin2(u,_) => { 
+                let mut shifted = u;
+                for c in 0..CELL_SIZE {
+                    tekst.push(  if  shifted & 0x1 == 1 { HEX_DIGITS[c] }   else  {' ' } );
+                    tekst.push(' ');
+                    shifted = shifted >> 1;
+                    match c {
+                        2 => tekst += "               \n" ,
+                        5 => tekst += "               \n",
+                        _ => ()
+                    }
+                };
+                offset = 30.0;
+                t_size = 16.0;
+                t_color = Color::rgb8(0xEE, 0x22, 0x22);
+            },
         };
         // This is the builder-style way of drawing text.
         let text = ctx.text();
@@ -320,7 +336,8 @@ fn evaluate_cellstate(state:&CellState, value:usize) -> bool {
     let mask = 1 << (value -1);
     match state {
         CellState::Solved(_,_) => false,
-        CellState::UnSolved(m) => m & mask == mask 
+        CellState::UnSolved(m) => m & mask == mask, 
+        CellState::Twin2(m,_)  => m & mask == mask, 
     }
 } 
 
