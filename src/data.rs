@@ -14,6 +14,8 @@ pub const COMMAND_SELECTED: Selector<String> = Selector::new("sudoku.selected");
 pub const COMMAND_SLOWMOTION: Selector<String> = Selector::new("sudoku.slowmotion");
 pub const COMMAND_NUMBER: Selector<(RcSudokuCell, usize)> = Selector::new("sudoku.number");
 
+pub const INI_FILE:&str = "data/sudoku.ini";
+
 pub const HEX_DIGITS:[char;CELL_SIZE] = ['1','2','3','4','5','6','7','8','9'];
 
 pub const CELL_SIZE: usize = 9;

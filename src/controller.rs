@@ -110,7 +110,7 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
 
 pub fn load_file(data: &mut AppState)  {
     // Open the file in read-only mode (ignoring errors)
-    let map = ini!("/data/workspace/rust/app/sudoku3x3_rust/data/sudoku.ini");
+    let map = ini!(INI_FILE);
 
     for (key, _value) in &map {
         data.board_list.push_back(key.to_string());
@@ -120,7 +120,7 @@ pub fn load_file(data: &mut AppState)  {
 }
 fn select_board(data: &mut AppState){
     // Open the file in read-only mode (ignoring errors)
-    let map = ini!("/data/workspace/rust/app/sudoku3x3_rust/data/sudoku.ini");
+    let map = ini!(INI_FILE);
     let board = & *data.board;             
     let sudoku = map.get(&data.selected).unwrap();
 
