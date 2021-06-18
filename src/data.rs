@@ -68,7 +68,7 @@ impl AppState {
             which :true,
             board: Arc::new(board),
             //select_window: SelectState {
-            selected:"".into(),
+            selected:"hard".into(),
             board_list: im::vector![],
             autoselect_list: im::vector![],
             //}
@@ -82,9 +82,12 @@ impl AppState {
         self.steps += 1;
         self.steps_s = format!("{}", self.steps);
         let board = &*self.board;
-        board.resolve_step();
-        //board.show();
         self.which = false;
+        match board.resolve_step(){
+            Ok(_)    =>  self.message = "Stepped".into(),
+            Err(mess)    =>  self.message = mess,
+        }
+        //board.show();
     }    
     pub fn do_restart(&mut self) {
         let board = &*self.board;

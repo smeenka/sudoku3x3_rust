@@ -3,6 +3,7 @@ use std::cell::{RefCell};
 //use std::sync::Arc;
 use druid::{Data, Lens};
 use crate::data::*;
+use std::collections::*;
 
 const CELL_RESET_MASK:usize = 0x1FF; 
 
@@ -10,7 +11,7 @@ pub struct SudokuError {
 
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum CellActor{
     StartValue,
     Resolved,
@@ -19,7 +20,7 @@ pub enum CellActor{
 
 
 #[allow(dead_code)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum CellState{
     Solved(usize, CellActor),   // uzize contains the positive bitmask for the resolved. There can be only one 1 in the mask
                                 // count_ones == 1  0b001 == 1, 0b0010 == 2 0b01000 = 3 etc
@@ -37,7 +38,7 @@ pub struct SudokuCell {
 impl SudokuCell {
     pub fn new(r:usize,c:usize) -> SudokuCell {
         SudokuCell{
-           value: CellState::UnSolved(0x1FF),
+           value: CellState::UnSolved(CELL_RESET_MASK),
            row:r,
            col:c,
            idx: r*CELL_SIZE +c,
@@ -66,7 +67,7 @@ impl SudokuCell {
     pub fn get_resolved_mask(&self) -> usize {
         // a 1 bit in the mask indicate a resolved cell
         match self.value {
-            CellState::Solved(v,_) => v, 
+            CellState::Solved(v,_)  => v, 
             _                      => 0,
         }
     }
@@ -77,34 +78,38 @@ impl SudokuCell {
     pub fn get_unresolved_mask(&self) -> usize {
         match self.value {
             CellState::Solved(v,_) =>  v, 
-            CellState::UnSolved(n) =>  n, 
+            CellState::UnSolved(n)  =>  n, 
         }
     }
  
     // substract bits in in the possible bit masks. If current cell is now resolved return true
-    pub fn reduce(&mut self, mask:usize) -> bool  {
+    pub fn reduce(&mut self, other_mask:usize)  -> Result<usize, String> {
         // substract the mask from the bits in this cell. If only one bit left, mark as solved
-        let result =
+         
         match self.value {
-            CellState::Solved(_v,_) => false,
-            CellState::UnSolved(my_mask) => {
-                // do not reduce bits wich are already solved
-                if my_mask != CELL_RESET_MASK &&  (my_mask & mask == mask) { return false;}
-                
-                let new_mask = my_mask & !mask;
-                if new_mask.count_ones() == 1 {
-                    self.value = CellState::Solved( new_mask, CellActor::Resolved);  
-                    println!("Solved in reduce cell {:?} value {} my mask {:09b} incoming mask {:09b}",  self.get_pos(), self.as_string(), my_mask ,mask, ) ;
-                    true
-                } else { 
-                    if my_mask != new_mask {
-                        self.value = CellState::UnSolved( new_mask);
+            CellState::Solved(_v,_) => return Ok(0),
+            CellState::UnSolved(my_mask) => {  
+                if my_mask != CELL_RESET_MASK &&  (my_mask & other_mask == my_mask) { 
+                    Ok(0) 
+                } else {
+                    let new_mask = my_mask & !other_mask;
+                    let nr_bits = new_mask.count_ones(); 
+                    if nr_bits == 1 {
+                        self.value = CellState::Solved( new_mask, CellActor::Resolved);  
+                        println!("Solved in reduce cell {:?} value {} my mask {:09b}  other {:09b}",  self.get_pos(), self.as_string(), my_mask, other_mask  );
+                    } else  if my_mask != new_mask {
+                        self.value = CellState::UnSolved( new_mask)
+                    };
+                    if nr_bits == 0 {
+                        println!("Error: in reduce zero bits left for {:?}  incoming mask {:09b}", self.get_pos(), other_mask);
+                        Err( format!("Error: in reduce zero bits left for {:?}  incoming mask {:09b}", self.get_pos(), other_mask) )
+                    }else {
+                        Ok(0)
                     }
-                    false
                 }
+                
             },
-        };
-        result
+        }        
     }
     pub fn set_init_value(&mut self, v:usize)  {
         self.value = CellState::Solved( 1 << (v - 1) , CellActor::StartValue); 
@@ -118,7 +123,7 @@ impl SudokuCell {
      */
     pub fn set_solved_value(&mut self, mask:usize) -> bool  {
         match self.value {
-            CellState::UnSolved(n) => {
+            CellState::UnSolved(n)  => {
                 if (n & mask)  == mask {
                     self.value = CellState::Solved(mask, CellActor::Resolved);
                     println!("Resolved cell {:?} value {}", self.get_pos(), self.as_string());
@@ -171,8 +176,8 @@ impl RcSudokuCell {
         // dereference the Rc 
         self.cell.borrow().value.clone()
     }
-    pub fn reduce(&self, other_mask: usize)  -> bool {
-        self.cell.borrow_mut().reduce(other_mask)
+    pub fn reduce(&self, other: usize) -> Result<usize, String>   {
+        self.cell.borrow_mut().reduce(other)
     }
     pub fn get_resolved_mask(&self) -> usize {
         self.cell.borrow().get_resolved_mask()
@@ -454,16 +459,17 @@ impl SudokuBoard {
             }
         }
     }
-    pub fn resolve_step( &self) {
+    pub fn resolve_step( &self) ->Result<usize, String>{
         for r in 0..CELL_ROW {
-            reduce_square( &self.rows[r]);
+            reduce_square( &self.rows[r])?;
         }
         for r in 0..CELL_ROW {
-            reduce_square( &self.cols[r]);
+            reduce_square( &self.cols[r])?;
         }
         for r in 0..CELL_ROW {
-            reduce_square( &self.squares[r]);
+            reduce_square( &self.squares[r] )?;
         }
+        Ok(0)
     }
     pub fn check_board( &self) {
         for r in 0..CELL_ROW {
@@ -485,70 +491,113 @@ fn print_layout(row_col_square: &dyn RowColSquare) {
 }
 
 
-fn reduce_square(row_col_square: &dyn RowColSquare)/* -> Result<i32, SudokuError>*/ {
-    let mut mask = 0;
-    // Step 1 get the resolved mask for all cells. A 1 on a bitpos means resolved.
+fn reduce_square(row_col_square: &dyn RowColSquare) -> Result<usize, String> {
     let cells = row_col_square.get_cells();
 
-    loop {
-        let mut changed = false;
-        for n in 0..CELL_SIZE {
-            mask |= cells[n].get_resolved_mask();
-        }
-        // the mask does contain for each resolved cell a 1
-        // Substract the already resolved values from the array of possible values. 
-        // if only one bit is left the function will mark the cell as resolved
-        for n in 0..CELL_SIZE {
-            changed = changed || cells[n].reduce(mask);
-        }
-        if !changed {break;}
-    } ; 
-
-    // count the possible locations  for each value
-    let mut option_count  = [0; CELL_SIZE];
-
-    for row in 0..CELL_SIZE {
-        let cell = &cells[row];
-        let mut mask = cell.get_unresolved_mask();
-        for bitpos in 0..CELL_SIZE {
-            // if bit is one, there is a possible location found for this value
-            if (mask & 1) == 1 {
-                option_count[bitpos] += 1
+    // Step 1: reduce the possible cell values with the already solved ones
+    //  get the resolved mask for all cells. A 1 on a bitpos means resolved.
+    for this in 0..CELL_SIZE {
+        let thiscell =  &cells[this];
+        for other in 0..CELL_SIZE {
+            if other != this {
+                let othercell =  &cells[other];
+                thiscell.reduce(othercell.get_resolved_mask())?;
             }
-            mask = mask >> 1;
         }
     }
+    // Step 2 the inverse of step 1
+    // in step 1 for each given cell we investigate the possible values
+    // in step 2 for each given value investigate the possible cells
     
-    // for each position in the option_count check value 1
-    for row in 0..CELL_SIZE {
-        if option_count[row] == 1 {
-            let mask = 1 << row;
-            // again iterate over the cells and find the cell with the current mask
-            for c in 0..CELL_SIZE {
-                let cell = &cells[c];
-                match cell.get_state() {
-                    CellState::UnSolved(n) => {
-                        if n & mask == mask {
-                            println!("Would advice for cell {:?} value {}", cell.get_pos(), row +1);
-                            if (7,5) == cell.get_pos() {
-                                println!("bingo");
-                            }
-                            cell.set_solved_value(mask);
-                            break;
-                        }
-                    }
-                    _ => (),
-                }
+    let mut possible_cells:Vec<usize> = vec![ 0;CELL_SIZE];   // Step 1 get the resolved mask for all cells. A 1 on a bitpos means resolved.
+
+    for value in 0..CELL_SIZE {
+        let value_mask = 1<< value;
+
+        for n in 0.. CELL_SIZE{
+            let cell_mask  = 1 << n;
+            let cell = &cells[n];
+            let mask = cell.get_unresolved_mask();
+
+            if mask & value_mask == value_mask {
+                // ok this value could placed in  tnis cell
+                possible_cells[value] |= cell_mask;
             }
         }
     }
-     
-    // Show the results on the terminal
+    // step 3 find loners (resolved cells hidden in the wood of unresolved bits
+    for n in 0..CELL_SIZE {
+
+        let mask = possible_cells[n];
+        if mask.count_ones() == 0 {
+            println!("Error: in reduce square zero bits left for value {}  ", n+1);
+
+            return Err(format!("For value {} no positions anymore",n+1));
+        } else
+        if mask.count_ones() == 1 {
+            let index = mask.trailing_zeros() as usize;
+            let cell = &cells[index];
+            let value_mask = 1<< n;
+            match cell.get_state() {
+                CellState::UnSolved(_) => {
+                    println!("Found a loner hidden in  the bush {:?} value {}", cell.get_pos(), n +1);
+                    cell.set_solved_value(value_mask);
+                },
+               _  => ()
+            } 
+        } 
+    }
+  
+    // step 4 make a hasmap of the unresolved masks, and count the twins
+    let mut overall_twin_mask = 0;
+
+    let mut twin_hash:HashMap<usize,usize> = HashMap::new();   
+ 
+    // for each possible value masks count the amount
+    for c in 0..CELL_SIZE {
+        let cell = &cells[c];
+        let unresolved = cell.get_unresolved_mask();
+        let result = 
+                match twin_hash.get(&unresolved){
+                    Option::Some(n)   => n + 1,
+                    Option::None      => 1,
+                    };
+        twin_hash.insert(unresolved, result);
+    }
+    // now iterate over the map and find the twins
+    for (key, val) in twin_hash.iter() {
+        if key.count_ones () == 2 && *val == (2  as usize) {
+            println!("Found a twin2 (not yet resolved). Twin   mask {:09b}", key  );
+            overall_twin_mask |= key;
+        }
+    }
+    if overall_twin_mask > 0{
+        println!("Reduce due to found twin mask {:09b} ", overall_twin_mask);
+        for c in 0..CELL_SIZE {
+            let cell = &cells[c];
+            //cell.reduce(overall_twin_mask);
+        }
+        
+    }
+
+
+ 
+   // Show the results on the terminal
     print!("{:10} ", row_col_square.get_id());
     for n in 0..CELL_SIZE {
-        print!("{} ", option_count[n]);
+        print!(" {}:{:09b} ", n+1, possible_cells[n] );
     }
     println!();
+
+    /*
+    print!("{:10} ", row_col_square.get_id());
+    for (key, val) in count_hash.iter() {
+        print!("-{:09b}:{:?}-",  key, val);
+    }
+    println!();
+*/
+
+    Ok(0)
 }
 /********************************************************************************************************** */
 
@@ -572,7 +621,7 @@ mod tests {
         bref.init();
         bref.show();
         for _ in 0 .. 3 {
-            bref.resolve_step();
+            bref.resolve_step().expect("something wrong");
             bref.show();
         }
     }

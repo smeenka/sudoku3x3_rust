@@ -320,7 +320,7 @@ fn evaluate_cellstate(state:&CellState, value:usize) -> bool {
     let mask = 1 << (value -1);
     match state {
         CellState::Solved(_,_) => false,
-        CellState::UnSolved(m) => m & mask == mask, 
+        CellState::UnSolved(m)  => m & mask == mask, 
     }
 } 
 
