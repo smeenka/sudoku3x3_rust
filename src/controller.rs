@@ -3,9 +3,6 @@ use druid::{
     Env, Event, EventCtx,  Widget,  Command, 
 };
 //use crate::sudoku::{SudokuBoard};
-use ini::ini;
-
-
 use crate::{
     data::*
 };
@@ -53,7 +50,6 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
         let sel = cmd.get(COMMAND_INIT);
         println!("Received command Init with id  {:?}", sel   );
         data.do_restart();
-        data.count_initial();
         data.message = "Select digits ..".into();
     } else 
     if  cmd.is(COMMAND_SELECT)
@@ -74,24 +70,19 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
         println!("Received command Select with id  {:?}", sel   );
         data.do_restart();
         data.selected = sel.unwrap().to_string();
-        select_board(data);     
-        data.count_initial();
-        data.which = false;
+        data.select_board();     
     } else 
     if  cmd.is(COMMAND_STEP)
     {
         let sel = cmd.get(COMMAND_SOLVE);
         println!("Received command Solve with id  {:?}", sel   );
         data.do_step();
-        data.count_current();
-        data.message = "Stepping ..".into();
-        data.which = false;
 
     } else 
-    if  cmd.is(COMMAND_SLOWMOTION)
+    if  cmd.is(COMMAND_BACK)
     {
-        let sel = cmd.get(COMMAND_SLOWMOTION);
-        println!("Received command Step with id  {:?}", sel   );
+        println!("Received command Step Back");
+        data.do_step_back();
     } else 
     if  cmd.is(COMMAND_SOLVE)
     {
@@ -104,37 +95,7 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
         println!("Received command Solve with id  {:?} from {:?}", sel.1, sel.0.get_value()   );
         sel.0.set_init_value(sel.1);
         data.do_step();
-        data.count_initial();
     } 
 }
 
-pub fn load_file(data: &mut AppState)  {
-    // Open the file in read-only mode (ignoring errors)
-    let map = ini!(INI_FILE);
 
-    for (key, _value) in &map {
-        data.board_list.push_back(key.to_string());
-    }
-    data.selected = "".to_string();
-    data.autoselect();
-}
-fn select_board(data: &mut AppState){
-    // Open the file in read-only mode (ignoring errors)
-    let map = ini!(INI_FILE);
-    let board = & *data.board;             
-    let sudoku = map.get(&data.selected).unwrap();
-
-    for (key, value) in sudoku {
-        if key.starts_with("row"){
-            let rowc = key.chars().nth(3).unwrap();
-            let row = rowc.to_digit(10).unwrap() - 1; 
-            for col in 0..9 {
-                let valc = value.as_ref().unwrap().chars().nth(col).unwrap();
-                if '-' != valc {
-                    let v = valc.to_digit(16).unwrap(); 
-                    board.init_cell(row as usize, col, v as usize);     
-                }
-            } 
-        }
-    }
-}

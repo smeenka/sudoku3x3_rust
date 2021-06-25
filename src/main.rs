@@ -4,16 +4,18 @@ use druid::*;
 use druid::widget::*;
 use druid::piet::*;
 extern crate ini;
+
 use sudoku3x3::{
     controller::*,
-    sudoku::*,
+    sudoku_board::*,
+    sudoku_state::*,
     data::*
 };
 
 pub fn main() {
     let mut app_state = AppState::new();
-    load_file(&mut app_state);
-    let board = app_state.board.clone();
+    app_state.init();
+    let board = app_state.get_board_ref();
     let window = WindowDesc::new(move || ui_builder(board))
             .title("Sudoku 3x3")
             .window_size((600.0, 650.0));
@@ -96,17 +98,29 @@ fn ui_build_menuitems() -> impl Widget<AppState> {
         ctx.submit_command(COMMAND_INIT.with( "".to_string() )  ) )   
     )
     .with_flex_spacer(1.0)
+    .with_child(Button::new("Back").on_click(|ctx, _data: &mut AppState, _env| 
+        ctx.submit_command(COMMAND_BACK.with( "".to_string()  ) ) )  
+    )
+    .with_flex_spacer(1.0)
     .with_child(Button::new("Step").on_click(|ctx, _data, _env| 
             ctx.submit_command(COMMAND_STEP.with( "".to_string()  ) ) )
     )
     .with_flex_spacer(1.0)
-    .with_child(Button::new("Slowmotion").on_click(|ctx, _data: &mut AppState, _env| 
-        ctx.submit_command(COMMAND_SLOWMOTION.with( "".to_string()  ) ) )  
+    .with_child(Button::new("Solve")
+            .on_click(| ctx, _data, _env| 
+            ctx.submit_command(COMMAND_SOLVE.with( "".to_string() ) ) )
     )
-    .with_flex_spacer(1.0)
-    .with_child(Button::new("Solve").on_click(| ctx, _data, _env| 
-        ctx.submit_command(COMMAND_SOLVE.with( "".to_string() ) ) ) 
+    /*
+    .with_child(
+        MenuItem::new(
+            LocalizedString::new("hello-counter"), //.with_arg("count", _),
+            COMMAND_SOLVE.with( "".to_string() ) 
+            
+
+       )
+       //.disabled_if(|| data.which),
     )  
+    */
     .with_spacer(5.0)
 }
 /*
@@ -261,7 +275,13 @@ impl Widget<AppState> for CellWidget {
                 t_size = 16.0;
                 t_color = Color::rgb8(0xEE, 0x22, 0x22);
             },
-        };
+            CellState::Error => { 
+                tekst = "Error".to_string();
+                offset = 15.0;
+                t_size = 20.0;
+                t_color = Color::rgb8(0xFF, 0x00, 0x00);
+            }
+        }
         // This is the builder-style way of drawing text.
         let text = ctx.text();
         let layout = text
@@ -321,6 +341,8 @@ fn evaluate_cellstate(state:&CellState, value:usize) -> bool {
     match state {
         CellState::Solved(_,_) => false,
         CellState::UnSolved(m)  => m & mask == mask, 
+        CellState::Error       => false
+
     }
 } 
 
@@ -335,18 +357,18 @@ fn ui_build_statusline() -> impl Widget<AppState> {
     .with_flex_spacer(10.0)
     .with_child( Label::new(|data: &String, _env: &_| data.clone())
         .with_text_size(16.0)
-        .lens(AppState::start_count_s)
+        .lens(AppState::init_count)
         .padding(1.0)
     )
     .with_flex_spacer(10.0)
     .with_child( Label::new(|data: &String, _env: &_| data.clone() ) 
         .with_text_size(16.0)
-        .lens(AppState::curr_count_s)
+        .lens(AppState::curr_count)
     )
     .with_flex_spacer(10.0)
     .with_child( Label::new(|data: &String, _env: &_| data.clone() ) 
         .with_text_size(16.0)
-        .lens(AppState::steps_s)
+        .lens(AppState::step_count)
     )
     .with_flex_spacer(10.0)
     .with_child( Label::new(|data: &String, _env: &_| data.clone())

@@ -3,12 +3,12 @@ use std::cell::{RefCell};
 //use std::sync::Arc;
 use druid::{Data, Lens};
 use crate::data::*;
-use std::collections::*;
+use crate::sudoku_state::*;
+//use std::collections::*;
 
 const CELL_RESET_MASK:usize = 0x1FF; 
 
 pub struct SudokuError {
-
 }
 
 #[derive(Clone, PartialEq)]
@@ -25,6 +25,7 @@ pub enum CellState{
     Solved(usize, CellActor),   // uzize contains the positive bitmask for the resolved. There can be only one 1 in the mask
                                 // count_ones == 1  0b001 == 1, 0b0010 == 2 0b01000 = 3 etc
     UnSolved(usize),            // usize contains the bitmask 1 means not yet resolved, 0 means resolved
+    Error
 }
 
 #[derive(Clone )]
@@ -33,6 +34,7 @@ pub struct SudokuCell {
     row:usize,
     col:usize,
     idx:usize,
+    stack:Vec<CellState>,
 }
 
 impl SudokuCell {
@@ -42,6 +44,7 @@ impl SudokuCell {
            row:r,
            col:c,
            idx: r*CELL_SIZE +c,
+           stack:vec![],
         }
     }
     pub fn get_value(&self) -> String {
@@ -79,6 +82,7 @@ impl SudokuCell {
         match self.value {
             CellState::Solved(v,_) =>  v, 
             CellState::UnSolved(n)  =>  n, 
+            CellState::Error  =>  CELL_RESET_MASK, 
         }
     }
  
@@ -101,14 +105,17 @@ impl SudokuCell {
                         self.value = CellState::UnSolved( new_mask)
                     };
                     if nr_bits == 0 {
-                        println!("Error: in reduce zero bits left for {:?}  incoming mask {:09b}", self.get_pos(), other_mask);
-                        Err( format!("Error: in reduce zero bits left for {:?}  incoming mask {:09b}", self.get_pos(), other_mask) )
+                        let message = format!("Error: in reduce zero bits left for {:?}  incoming mask {:09b}", self.get_pos(), other_mask);
+                        println!("{}", message);
+                        self.value = CellState::Error;
+                        Err( message )
                     }else {
                         Ok(0)
                     }
                 }
                 
             },
+            CellState::Error => Err("Cell in Error state".to_string())
         }        
     }
     pub fn set_init_value(&mut self, v:usize)  {
@@ -116,6 +123,7 @@ impl SudokuCell {
     } 
     pub fn reset(&mut self)  {
         self.value = CellState::UnSolved(CELL_RESET_MASK); 
+        self.stack = vec![];
     } 
     /**
      * Set the solved value, but only if the current mask is equal to the incoming value
@@ -134,16 +142,31 @@ impl SudokuCell {
             _ => false,
         }
     } 
-    // if solved return 1 else return zero. If intitial is true return only begin situation, else the current situation
-    pub fn count_solved(&self, intitial:bool ) -> usize {
+    // return (0,0) if cell is not resolved
+    // return (1,1) if cell is resolved, but in initial state
+    // return (0,1) if the cell is resolved due to stepping
+    pub fn count_solved(&self) -> (usize,usize) {
         match &self.value {
-            CellState::Solved(_,actor) => 
-                match actor {
-                    CellActor::StartValue => 1 ,
-                    _ if intitial => 0,
-                    _  => 1,
-                } 
-            _ => 0
+            CellState::Solved(_,actor) => {
+                match  actor {
+                    CellActor::StartValue  => (1, 1),
+                    _ => ( 0, 1 )
+                }
+            },
+            _ => (0 , 0)
+        }
+    }
+
+    fn push(&mut self){
+        self.stack.push(self.value.clone());
+
+    }
+    fn pop(&mut self){
+        if self.stack.len() > 0 {
+            match self.stack.pop() {
+                Some(v) => self.value = v,
+                None    => ()
+            }
         }
     }
 } // cell
@@ -189,11 +212,19 @@ impl RcSudokuCell {
         // dereference the Rc into the CellState
         self.cell.borrow_mut().set_solved_value(mask)
     } 
-    pub fn count_solved(&self, intitial:bool ) -> usize{
-        self.cell.borrow().count_solved(intitial )
+
+    pub fn count_solved(&self) -> (usize,usize) {
+        self.cell.borrow().count_solved()
     }
+
     pub fn reset(&self)  {
         self.cell.borrow_mut().reset();
+    }
+    pub fn pop(&self)  {
+        self.cell.borrow_mut().pop();
+    }
+    pub fn push(&self)  {
+        self.cell.borrow_mut().push();
     }
     pub fn get_pos(&self) -> (usize,usize) {
         self.cell.borrow().get_pos() 
@@ -229,6 +260,16 @@ impl AllCells {
             self.cells[i].reset();
         }
     }
+    fn push(&self){
+        for i in 0 .. CELL_ROW  * CELL_COL  {
+            self.cells[i].push();
+        }
+    }
+    fn pop(&self){
+        for i in 0 .. CELL_ROW  * CELL_COL  {
+            self.cells[i].pop();
+        }
+    }            
 }
 
 pub trait RowColSquare  {
@@ -361,9 +402,8 @@ impl SudokuBoard {
                   },
         }        
     }
-    pub fn reset(&self){
-        self.allcells.reset();
-    }
+    pub fn reset(&self) {         self.allcells.reset();    }
+    pub fn pop(  &self) {         self.allcells.pop();     }
 
     // replace all dummy rc's to the actual reference
     pub fn wire(& mut self) -> &SudokuBoard {
@@ -385,20 +425,73 @@ impl SudokuBoard {
         self
     }
 
+
+    pub fn count_solved(&self) -> (usize, usize)  {
+        let mut init_count = 0;
+        let mut curr_count = 0;
+        for cell in &self.allcells.cells{
+            let counts = cell.count_solved();
+            init_count += counts.0;
+            curr_count += counts.1;
+        }
+        (init_count, curr_count)
+    }
+
+    pub fn show( &self){
+        for r in 0..CELL_SIZE{
+            let row = &self.rows[r];
+            for c in 0..CELL_SIZE{
+                let cell = &row.cells[c];
+                print!(" {}", cell.get_value());
+                match c {
+                    2 => print!(" |"),
+                    5 => print!(" |"),
+                    8 => println!(""),
+                    _ => ()
+                }
+            }
+            match r {
+                2 => println!("-------|-------|---------"),
+                5 => println!("-------|-------|---------"),
+                _ => ()
+            }
+        }
+    }
+    pub fn resolve_step( &self) ->Result<usize, String>{
+        self.allcells.push();
+        for r in 0..CELL_ROW {
+            reduce_square( &self.rows[r])?;
+        }
+        for r in 0..CELL_ROW {
+            reduce_square( &self.cols[r])?;
+        }
+        for r in 0..CELL_ROW {
+            reduce_square( &self.squares[r] )?;
+        }
+        Ok(0)
+    }
+    pub fn check_board( &self) {
+        for r in 0..CELL_ROW {
+            println!("---------------index {}", r);
+            print_layout( &self.rows[r]);
+            print_layout( &self.cols[r]);
+            print_layout( &self.squares[r]);
+        }
+    }
     /*
-|   |   |   |
-| 7 |   |9  |
-|5  |9  |  2|
--------------
-|   |1 6|4  |
-|461|   |   |
-|   |  5|  6|
--------------
-| 86| 4 |3  |
-|9 2| 1 |  8|
-|3  |  8|   |
--------------
-*/    
+    |   |   |   |
+    | 7 |   |9  |
+    |5  |9  |  2|
+    -------------
+    |   |1 6|4  |
+    |461|   |   |
+    |   |  5|  6|
+    -------------
+    | 86| 4 |3  |
+    |9 2| 1 |  8|
+    |3  |  8|   |
+    -------------
+    */    
     pub fn init(& self){
 
         self.init_cell( 1, 1,  7);
@@ -430,176 +523,9 @@ impl SudokuBoard {
         let cell = &self.rows[r].cells[c];
         let refcell = &*cell;
         refcell.set_init_value(v);
-    }
-
-    pub fn count_solved(&self, initial:bool) -> usize {
-        let mut  count = 0;
-        for cell in &self.allcells.cells{
-            count += cell.count_solved(initial);
-        }
-        count
-    }
-    pub fn show( &self){
-        for r in 0..CELL_SIZE{
-            let row = &self.rows[r];
-            for c in 0..CELL_SIZE{
-                let cell = &row.cells[c];
-                print!(" {}", cell.get_value());
-                match c {
-                    2 => print!(" |"),
-                    5 => print!(" |"),
-                    8 => println!(""),
-                    _ => ()
-                }
-            }
-            match r {
-                2 => println!("-------|-------|---------"),
-                5 => println!("-------|-------|---------"),
-                _ => ()
-            }
-        }
-    }
-    pub fn resolve_step( &self) ->Result<usize, String>{
-        for r in 0..CELL_ROW {
-            reduce_square( &self.rows[r])?;
-        }
-        for r in 0..CELL_ROW {
-            reduce_square( &self.cols[r])?;
-        }
-        for r in 0..CELL_ROW {
-            reduce_square( &self.squares[r] )?;
-        }
-        Ok(0)
-    }
-    pub fn check_board( &self) {
-        for r in 0..CELL_ROW {
-            println!("---------------index {}", r);
-            print_layout( &self.rows[r]);
-            print_layout( &self.cols[r]);
-            print_layout( &self.squares[r]);
-        }
+        self.allcells.push();
     }
 }
-/********************************************************************************************************** */
-/** Solver logica  */
-
-fn print_layout(row_col_square: &dyn RowColSquare) {
-    for cell in row_col_square.get_cells() {
-        print!(" {:?} - ", cell.get_pos());
-    }
-    println!("");
-}
-
-
-fn reduce_square(row_col_square: &dyn RowColSquare) -> Result<usize, String> {
-    let cells = row_col_square.get_cells();
-
-    // Step 1: reduce the possible cell values with the already solved ones
-    //  get the resolved mask for all cells. A 1 on a bitpos means resolved.
-    for this in 0..CELL_SIZE {
-        let thiscell =  &cells[this];
-        for other in 0..CELL_SIZE {
-            if other != this {
-                let othercell =  &cells[other];
-                thiscell.reduce(othercell.get_resolved_mask())?;
-            }
-        }
-    }
-    // Step 2 the inverse of step 1
-    // in step 1 for each given cell we investigate the possible values
-    // in step 2 for each given value investigate the possible cells
-    
-    let mut possible_cells:Vec<usize> = vec![ 0;CELL_SIZE];   // Step 1 get the resolved mask for all cells. A 1 on a bitpos means resolved.
-
-    for value in 0..CELL_SIZE {
-        let value_mask = 1<< value;
-
-        for n in 0.. CELL_SIZE{
-            let cell_mask  = 1 << n;
-            let cell = &cells[n];
-            let mask = cell.get_unresolved_mask();
-
-            if mask & value_mask == value_mask {
-                // ok this value could placed in  tnis cell
-                possible_cells[value] |= cell_mask;
-            }
-        }
-    }
-    // step 3 find loners (resolved cells hidden in the wood of unresolved bits
-    for n in 0..CELL_SIZE {
-
-        let mask = possible_cells[n];
-        if mask.count_ones() == 0 {
-            println!("Error: in reduce square zero bits left for value {}  ", n+1);
-
-            return Err(format!("For value {} no positions anymore",n+1));
-        } else
-        if mask.count_ones() == 1 {
-            let index = mask.trailing_zeros() as usize;
-            let cell = &cells[index];
-            let value_mask = 1<< n;
-            match cell.get_state() {
-                CellState::UnSolved(_) => {
-                    println!("Found a loner hidden in  the bush {:?} value {}", cell.get_pos(), n +1);
-                    cell.set_solved_value(value_mask);
-                },
-               _  => ()
-            } 
-        } 
-    }
-  
-    // step 4 make a hasmap of the unresolved masks, and count the twins
-    let mut overall_twin_mask = 0;
-
-    let mut twin_hash:HashMap<usize,usize> = HashMap::new();   
- 
-    // for each possible value masks count the amount
-    for c in 0..CELL_SIZE {
-        let cell = &cells[c];
-        let unresolved = cell.get_unresolved_mask();
-        let result = 
-                match twin_hash.get(&unresolved){
-                    Option::Some(n)   => n + 1,
-                    Option::None      => 1,
-                    };
-        twin_hash.insert(unresolved, result);
-    }
-    // now iterate over the map and find the twins
-    for (key, val) in twin_hash.iter() {
-        if key.count_ones () == 2 && *val == (2  as usize) {
-            println!("Found a twin2 (not yet resolved). Twin   mask {:09b}", key  );
-            overall_twin_mask |= key;
-        }
-    }
-    if overall_twin_mask > 0{
-        println!("Reduce due to found twin mask {:09b} ", overall_twin_mask);
-        for c in 0..CELL_SIZE {
-            let cell = &cells[c];
-            //cell.reduce(overall_twin_mask);
-        }
-        
-    }
-
-
- 
-   // Show the results on the terminal
-    print!("{:10} ", row_col_square.get_id());
-    for n in 0..CELL_SIZE {
-        print!(" {}:{:09b} ", n+1, possible_cells[n] );
-    }
-    println!();
-
-    /*
-    print!("{:10} ", row_col_square.get_id());
-    for (key, val) in count_hash.iter() {
-        print!("-{:09b}:{:?}-",  key, val);
-    }
-    println!();
-*/
-
-    Ok(0)
-}
-/********************************************************************************************************** */
 
 
 #[cfg(test)]
