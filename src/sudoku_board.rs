@@ -3,7 +3,6 @@ use std::cell::{RefCell};
 //use std::sync::Arc;
 use druid::{Data, Lens};
 use crate::data::*;
-use crate::sudoku_state::*;
 //use std::collections::*;
 
 const CELL_RESET_MASK:usize = 0x1FF; 
@@ -65,7 +64,7 @@ impl SudokuCell {
         (self.row +1, self.col +1)
     }
     /**
-     *  If this cell is resolved return the the bitmask.
+     *  If this cell is resolved return the the bitmask else 0
      */
     pub fn get_resolved_mask(&self) -> usize {
         // a 1 bit in the mask indicate a resolved cell
@@ -75,7 +74,7 @@ impl SudokuCell {
         }
     }
     /**
-     *  If this cell is resolved return the bitmask. 
+     *  If this cell is resolved return the bitmask (with one bit!). 
      *  If this cell is NOT resolved return the possibities for this cell. 
      */
     pub fn get_unresolved_mask(&self) -> usize {
@@ -86,10 +85,10 @@ impl SudokuCell {
         }
     }
  
-    // substract bits in in the possible bit masks. If current cell is now resolved return true
+    // If this cell is NOT resolved substract bits in the possible bit masks.
+    // If only one bit is left, mark as solved
+    // Return a Result 
     pub fn reduce(&mut self, other_mask:usize)  -> Result<usize, String> {
-        // substract the mask from the bits in this cell. If only one bit left, mark as solved
-         
         match self.value {
             CellState::Solved(_v,_) => return Ok(0),
             CellState::UnSolved(my_mask) => {  
@@ -113,7 +112,6 @@ impl SudokuCell {
                         Ok(0)
                     }
                 }
-                
             },
             CellState::Error => Err("Cell in Error state".to_string())
         }        
@@ -404,6 +402,7 @@ impl SudokuBoard {
     }
     pub fn reset(&self) {         self.allcells.reset();    }
     pub fn pop(  &self) {         self.allcells.pop();     }
+    pub fn push( &self) {         self.allcells.push();     }
 
     // replace all dummy rc's to the actual reference
     pub fn wire(& mut self) -> &SudokuBoard {
@@ -425,7 +424,19 @@ impl SudokuBoard {
         self
     }
 
-
+    pub fn all_logic_squares(&self) -> Vec<&dyn RowColSquare> {
+        let mut result:Vec<&dyn RowColSquare> = vec![];
+        for row in &self.rows {
+            result.push(row);
+        }
+        for col in &self.cols {
+            result.push(col);
+        }
+        for square in &self.squares {
+            result.push(square);
+        }
+        result
+    }
     pub fn count_solved(&self) -> (usize, usize)  {
         let mut init_count = 0;
         let mut curr_count = 0;
@@ -457,27 +468,21 @@ impl SudokuBoard {
             }
         }
     }
-    pub fn resolve_step( &self) ->Result<usize, String>{
-        self.allcells.push();
-        for r in 0..CELL_ROW {
-            reduce_square( &self.rows[r])?;
-        }
-        for r in 0..CELL_ROW {
-            reduce_square( &self.cols[r])?;
-        }
-        for r in 0..CELL_ROW {
-            reduce_square( &self.squares[r] )?;
-        }
-        Ok(0)
-    }
     pub fn check_board( &self) {
         for r in 0..CELL_ROW {
             println!("---------------index {}", r);
-            print_layout( &self.rows[r]);
-            print_layout( &self.cols[r]);
-            print_layout( &self.squares[r]);
+            self.print_layout( &self.rows[r]);
+            self.print_layout( &self.cols[r]);
+            self.print_layout( &self.squares[r]);
         }
     }
+    pub fn print_layout(&self, row_col_square: &dyn RowColSquare) {
+        for cell in row_col_square.get_cells() {
+            print!(" {:?} - ", cell.get_pos());
+        }
+        println!("");
+    }
+
     /*
     |   |   |   |
     | 7 |   |9  |

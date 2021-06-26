@@ -55,8 +55,8 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
     if  cmd.is(COMMAND_SELECT)
     {
         let sel = cmd.get(COMMAND_SELECT);
+        data.show_select();     
         println!("Received command Select with id  {:?}", sel   );
-        data.which = true;
     } else 
     if  cmd.is(COMMAND_AUTOSELECT)
     {

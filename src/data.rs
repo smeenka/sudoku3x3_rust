@@ -21,6 +21,7 @@ pub const COMMAND_NUMBER: Selector<(RcSudokuCell, usize)> = Selector::new("sudok
 pub const INI_FILE:&str = "data/sudoku.ini";
 
 pub const HEX_DIGITS:[char;CELL_SIZE] = ['1','2','3','4','5','6','7','8','9'];
+pub const HEX_STRS:[&'static str;CELL_SIZE + 1] = ["0","1","2","3","4","5","6","7","8","9"];
 
 pub const CELL_SIZE: usize = 9;
 pub const CELL_ROW:  usize = 9;
@@ -43,7 +44,6 @@ pub struct AppState {
     step_count: String,
     init_count:String,
     curr_count:String,
-    pub which: bool,
     pub su_board: Arc<SudokuBoard>, // non mutable reference, for presentation only
     //pub select_window:SelectState,
     #[data(ignore)]
@@ -64,11 +64,9 @@ impl AppState {
             step_count: "0".to_string(),
             init_count:"0".to_string(),
             curr_count:"0".to_string(),
-            which :true,
             su_board: Arc::new(board),
             su_state:SudokuState::new(),
-            //select_window: SelectState {
-            selected:"hard".into(),
+            selected:"".into(),
             board_list: im::vector![],
             autoselect_list: im::vector![],
         }
@@ -89,7 +87,6 @@ impl AppState {
     }
     pub fn select_board(&mut self){
         // Open the file in read-only mode (ignoring errors)
-        self.which = false;
         let map = ini!(INI_FILE);
         let board = &*self.su_board;
         let sudoku = map.get(&self.selected).unwrap();
@@ -108,6 +105,7 @@ impl AppState {
             }
         }
         self.su_state.do_count(board);
+        self.su_state.reset();
         self.message = "Step .....".to_string();
     }
     
@@ -118,15 +116,40 @@ impl AppState {
     pub fn get_board_ref(&self) -> Arc<SudokuBoard> {
         self.su_board.clone()
     }
+    pub fn show_select(&mut self) {
+        self.su_state.select();
+        self.message = "Select a board ..".into();
+    }
+    pub fn isSelectBoardDisabled(&self) -> bool {
+        let gamestate = self.su_state.get_state();
+        ! ( GameState::Select == gamestate  || GameState::ManualInput == gamestate)
+    }
+    pub fn isBackDisabled(&self) -> bool {
+        let gamestate = self.su_state.get_state();
+        GameState::Select == gamestate
+    }
+    pub fn isStepDisabled(&self) -> bool {
+        let gamestate = self.su_state.get_state();
+        ! (GameState::ManualInput == gamestate || GameState::Stepping == gamestate)
+    }
+    pub fn isSolveDisabled(&self) -> bool {
+        let gamestate = self.su_state.get_state();
+        // ! (GameState::ManualInput == gamestate || GameState::Stepping == gamestate )
+        true
+    }
+    pub fn isSelectVisible(&self) -> bool {
+        let gamestate = self.su_state.get_state();
+        GameState::Select == gamestate 
+    }
 
     pub fn do_step(&mut self) {
         let state = &mut self.su_state;
         let board = & *self.su_board;
-        self.which = false;
         match state.resolve_step(board){
             GameState::Stepping     =>  self.message = "Stepping..".to_string(),
             GameState::Error        =>  self.message = "ERROR".to_string(),
-            GameState::Resolved     =>  self.message = "RESOLVED!!".to_string(),            
+            GameState::Solved       =>  self.message = "RESOLVED!!".to_string(),            
+            GameState::ManualInput  =>  self.message = "Manual Input".to_string(),            
             _                       =>  self.message = "unknown".to_string()
         }
         self.step_count = format!("{}", state.get_step_count());
@@ -153,7 +176,6 @@ impl AppState {
         self.step_count = format!("{}", state.get_step_count());
         self.init_count= format!("{}",  state.get_init_count());
         self.curr_count= format!("{}",  state.get_curr_count());
-        self.which =false;
     }
     pub fn autoselect(&mut self) {
         let listref = &self.board_list;

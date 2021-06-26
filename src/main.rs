@@ -8,7 +8,6 @@ extern crate ini;
 use sudoku3x3::{
     controller::*,
     sudoku_board::*,
-    sudoku_state::*,
     data::*
 };
 
@@ -16,7 +15,7 @@ pub fn main() {
     let mut app_state = AppState::new();
     app_state.init();
     let board = app_state.get_board_ref();
-    let window = WindowDesc::new(move || ui_builder(board))
+    let window = WindowDesc::new(ui_builder(board))
             .title("Sudoku 3x3")
             .window_size((600.0, 650.0));
 
@@ -34,7 +33,7 @@ fn ui_builder(board:Arc<SudokuBoard>) -> impl Widget<AppState> {
         .with_spacer(5.0)
         .with_flex_child(
             Either::new(
-                |data, _env| data.which,
+                |data, _env| data.isSelectVisible(),
                 build_autoselect(),
                 ui_build_board(&*board)
             ),10.0)
@@ -90,37 +89,30 @@ fn build_autoselect() -> impl Widget<AppState>{
 fn ui_build_menuitems() -> impl Widget<AppState> {
     Flex::row()
     .with_spacer(5.0)
-    .with_child(Button::new("Select board").on_click(|ctx, _data, _env| 
-        ctx.submit_command(COMMAND_SELECT.with( "".to_string() )  ) )   
+    .with_child(Button::new("Select board")
+        .disabled_if(|data:&AppState, _| data.isSelectBoardDisabled())    
+        .on_click(|ctx, _data, _env| ctx.submit_command(COMMAND_SELECT.with( "".to_string() )  ) )
     )
     .with_flex_spacer(1.0)
-    .with_child(Button::new("Restart").on_click(|ctx, _data, _env| 
-        ctx.submit_command(COMMAND_INIT.with( "".to_string() )  ) )   
+    .with_child(Button::new("Restart")
+        .on_click(|ctx, _data, _env|  ctx.submit_command(COMMAND_INIT.with( "".to_string() )  ) )   
     )
     .with_flex_spacer(1.0)
-    .with_child(Button::new("Back").on_click(|ctx, _data: &mut AppState, _env| 
-        ctx.submit_command(COMMAND_BACK.with( "".to_string()  ) ) )  
+    .with_child(Button::new("Back")
+        .disabled_if(|data:&AppState, _| data.isBackDisabled())    
+        .on_click(|ctx, _data: &mut AppState, _env|  ctx.submit_command(COMMAND_BACK.with( "".to_string()  ) ) )  
     )
     .with_flex_spacer(1.0)
-    .with_child(Button::new("Step").on_click(|ctx, _data, _env| 
-            ctx.submit_command(COMMAND_STEP.with( "".to_string()  ) ) )
+    .with_child(Button::new("Step")
+        .disabled_if(|data:&AppState, _| data.isStepDisabled())    
+        .on_click(|ctx, _data, _env|  ctx.submit_command(COMMAND_STEP.with( "".to_string()  ) ) )
     )
     .with_flex_spacer(1.0)
-    .with_child(Button::new("Solve")
-            .on_click(| ctx, _data, _env| 
-            ctx.submit_command(COMMAND_SOLVE.with( "".to_string() ) ) )
-    )
-    /*
-    .with_child(
-        MenuItem::new(
-            LocalizedString::new("hello-counter"), //.with_arg("count", _),
-            COMMAND_SOLVE.with( "".to_string() ) 
-            
-
-       )
-       //.disabled_if(|| data.which),
-    )  
-    */
+    .with_child (
+        Button::new("Solve")
+           .disabled_if(|data:&AppState, _| data.isSolveDisabled())    
+           .on_click(| ctx, _data:&mut AppState, _env| ctx.submit_command(COMMAND_SOLVE.with( "".to_string() ) ) ) 
+    ) 
     .with_spacer(5.0)
 }
 /*
@@ -187,7 +179,7 @@ impl Widget<AppState> for CellWidget {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut AppState, _env: &Env) {
         match event {
             Event::MouseDown(ref mouse) if mouse.button.is_right() => {
-                ctx.show_context_menu(ContextMenu::new( make_numberselect_menu(self.cell.clone()), mouse.pos));
+                ctx.show_context_menu( make_numberselect_menu(self.cell.clone()), mouse.pos);
             },
             _ => (),
         }
@@ -248,9 +240,9 @@ impl Widget<AppState> for CellWidget {
         ctx.fill(rounded, &env.get(theme::BACKGROUND_LIGHT));
         
         let mut tekst = "".into();
-        let mut t_color = Color::WHITE; 
         let mut t_size = 24.0;
         let mut offset = 10.0;
+        let mut t_color = Color::rgb8(0xEE, 0xEE, 0xEE);
         match self.cell.get_state() {
             CellState::Solved(v, actor)   => {
                     t_color = match actor { 
@@ -295,46 +287,26 @@ impl Widget<AppState> for CellWidget {
 } // CellWidget impl
 
 
-fn make_numberselect_menu (cell:RcSudokuCell) -> MenuDesc<AppState> {
-    let state = &cell.get_state();
-    MenuDesc::empty()
-        .append_if( MenuItem::new(LocalizedString::new("1") , 
-            COMMAND_NUMBER.with( (cell.clone(), 1 ) ) ),
-            ||  evaluate_cellstate(state, 1)
-        )
-        .append_if( MenuItem::new(LocalizedString::new("2") , 
-            COMMAND_NUMBER.with( (cell.clone(), 2 ) ) ) ,
-            ||  evaluate_cellstate(state, 2)
-        )
-        .append_if( MenuItem::new(LocalizedString::new("3") , 
-            COMMAND_NUMBER.with( (cell.clone(), 3 ) ) ) ,
-            ||  evaluate_cellstate(state, 3)
-        )
-        .append_if( MenuItem::new(LocalizedString::new("4") , 
-            COMMAND_NUMBER.with( (cell.clone(), 4 ) ) ) ,
-            ||  evaluate_cellstate(state, 4)
-        )
-        .append_if( MenuItem::new(LocalizedString::new("5") , 
-            COMMAND_NUMBER.with( (cell.clone(), 5 ) ) ) ,
-            ||  evaluate_cellstate(state, 5)
-        )
-        .append_if( MenuItem::new(LocalizedString::new("6") , 
-            COMMAND_NUMBER.with( (cell.clone(), 6 ) ) ) ,
-            ||  evaluate_cellstate(state, 6)
-        )
-        .append_if( MenuItem::new(LocalizedString::new("7") , 
-            COMMAND_NUMBER.with( (cell.clone(), 7 ) ) ) ,
-            ||  evaluate_cellstate(state, 7)
-        )
-        .append_if( MenuItem::new(LocalizedString::new("8") , 
-            COMMAND_NUMBER.with( (cell.clone(), 8 ) ) ) ,
-            ||  evaluate_cellstate(state, 8)
-        )
-        .append_if( MenuItem::new(LocalizedString::new("9") , 
-            COMMAND_NUMBER.with( (cell.clone(), 9 ) ) ) ,
-            ||  evaluate_cellstate(state, 9)
-        )
+fn make_numberselect_menu (cell:RcSudokuCell) -> Menu<AppState> {
+    let state = cell.get_state();
+    let mut menu = Menu::empty();
+
+    for i in 1 ..10 {
+        // do the clone outside the closure, clone inside the closure will take the original with into the closure
+        let cellclone = cell.clone();
+        menu = menu.entry(  
+            MenuItem::new(LocalizedString::new( HEX_STRS[i] ) )
+                .on_activate( move |_, data:&mut AppState, _| {
+                    cellclone.set_init_value(i);
+                    data.do_step();
+                })    
+                .enabled( evaluate_cellstate(&state, i) )
+            );
+    }
+    menu
 }
+
+    
 
 fn evaluate_cellstate(state:&CellState, value:usize) -> bool {
     let mask = 1 << (value -1);
