@@ -6,14 +6,17 @@ use crate::sudoku_state::*;
 use druid::im;
 use druid::*;
 use ini::ini;
+use std::fs::*;
+use std::io::*;
+//use std::io::buffered::BufferedWriter;
 
 
 
 pub const COMMAND_STEP: Selector<String>= Selector::new("sudoku.step");
 pub const COMMAND_SOLVE: Selector<String> = Selector::new("sudoku.solve");
+pub const COMMAND_SAVE: Selector<String> = Selector::new("sudoku.save");
 pub const COMMAND_INIT: Selector<String> = Selector::new("sudoku.init");
 pub const COMMAND_SELECT: Selector<String> = Selector::new("sudoku.select");
-pub const COMMAND_AUTOSELECT: Selector<String> = Selector::new("sudoku.autoselect");
 pub const COMMAND_SELECTED: Selector<String> = Selector::new("sudoku.selected");
 pub const COMMAND_BACK: Selector<String> = Selector::new("sudoku.back");
 pub const COMMAND_NUMBER: Selector<(RcSudokuCell, usize)> = Selector::new("sudoku.number");
@@ -85,6 +88,26 @@ impl AppState {
         self.selected = "".to_string();
         self.autoselect();
     }
+    pub fn save_file(&mut self)  {
+        // Open the path in read-only mode, returns `io::Result<File>`
+        let mut file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(INI_FILE).unwrap();
+
+        writeln!(file,"");    
+        writeln!(file,";Added by Rust Sudoku.");    
+        writeln!(file,"[{}]",self.selected);    
+        for row in &self.su_board.rows {
+            write!(file,"{}=",row.get_id());    
+            for cell in &row.cells{
+                write!(file,"{}",cell.get_value());    
+            }
+            writeln!(file,"");    
+        }
+        writeln!(file,";xxx");    
+    }
+ 
     pub fn select_board(&mut self){
         // Open the file in read-only mode (ignoring errors)
         let map = ini!(INI_FILE);
@@ -104,9 +127,8 @@ impl AppState {
                 } 
             }
         }
-        self.su_state.do_count(board);
-        self.su_state.reset();
-        self.message = "Step .....".to_string();
+        self.su_state.play(board);
+        self.message = "Rightclick for manual select".to_string();
     }
     
     //pub const lens_rows: ArcRowLens = ArcRowLens;
@@ -119,6 +141,17 @@ impl AppState {
     pub fn show_select(&mut self) {
         self.su_state.select();
         self.message = "Select a board ..".into();
+    }
+    pub fn exec_save(&mut self) {
+        if GameState::Select == self.su_state.get_state(){
+            self.save_file();
+            let board = &*self.su_board;
+            self.su_state.play(board);
+            self.message = "Start stepping ..".into();
+        }else {
+            self.su_state.select();
+            self.message = "Choose  unique name ..".into();
+        }
     }
     pub fn isSelectBoardDisabled(&self) -> bool {
         let gamestate = self.su_state.get_state();
@@ -140,6 +173,10 @@ impl AppState {
     pub fn isSelectVisible(&self) -> bool {
         let gamestate = self.su_state.get_state();
         GameState::Select == gamestate 
+    }
+    pub fn isSaveDisabled(&self) -> bool {
+        let gamestate = self.su_state.get_state();
+        GameState::Select == gamestate && self.autoselect_list.len() > 0
     }
 
     pub fn do_step(&mut self) {

@@ -294,7 +294,7 @@ impl RowColSquare for Row {
 
 impl Row {
     fn new (i:usize)-> Row {
-        Row{ cells:vec![], id:format!("Row: {}", i + 1)  }
+        Row{ cells:vec![], id:format!("row{}", i + 1)  }
     }
     pub fn wire(&mut self, r:usize,  allcells: &AllCells) {
         let startindex = r * CELL_SIZE;
@@ -544,17 +544,6 @@ mod tests {
         let bref = board.wire();
         bref.init();
         bref.show();
-    }
-    #[test]
-    fn test_do_3_steps() { 
-        let  mut board = SudokuBoard::new();
-        let bref = board.wire();
-        bref.init();
-        bref.show();
-        for _ in 0 .. 3 {
-            bref.resolve_step().expect("something wrong");
-            bref.show();
-        }
     }
     #[test]
     fn test_check_board() { 

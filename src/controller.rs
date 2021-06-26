@@ -23,7 +23,7 @@ impl<W: Widget<AppState>> Controller<AppState, W> for SudokuController {
             Event::MouseDown(_me) => {
                 //println!("Mouse down anykey {:?}" ,me.pos );
             }            
-            Event::KeyDown(ke)  => {
+            Event::KeyUp(ke)  => {
                 println!("Key Down {:?}" ,ke.key );
                 data.autoselect();
                 //ctx.set_handled();
@@ -58,12 +58,6 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
         data.show_select();     
         println!("Received command Select with id  {:?}", sel   );
     } else 
-    if  cmd.is(COMMAND_AUTOSELECT)
-    {
-        let sel = cmd.get(COMMAND_AUTOSELECT);
-        println!("Received command Select with id  {:?}", sel   );
-        data.autoselect();
-    } else 
     if  cmd.is(COMMAND_SELECTED)
     {
         let sel = cmd.get(COMMAND_SELECTED);
@@ -77,6 +71,11 @@ fn handle_commands(cmd: &Command, data: &mut AppState) {
         let sel = cmd.get(COMMAND_SOLVE);
         println!("Received command Solve with id  {:?}", sel   );
         data.do_step();
+
+    } else 
+    if  cmd.is(COMMAND_SAVE)
+    {
+        data.exec_save();
 
     } else 
     if  cmd.is(COMMAND_BACK)

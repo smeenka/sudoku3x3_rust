@@ -57,10 +57,6 @@ fn build_autoselect() -> impl Widget<AppState>{
         .with_spacer(10.0)
         .with_child(TextBox::new()
             .lens(AppState::selected)
-            .on_click(|ctx, _data, _env| 
-                ctx.submit_command(COMMAND_AUTOSELECT.with( "".to_string() )  ) 
-            )
-               
         )
         .fix_height(20.0)
         .align_left()
@@ -112,6 +108,12 @@ fn ui_build_menuitems() -> impl Widget<AppState> {
         Button::new("Solve")
            .disabled_if(|data:&AppState, _| data.isSolveDisabled())    
            .on_click(| ctx, _data:&mut AppState, _env| ctx.submit_command(COMMAND_SOLVE.with( "".to_string() ) ) ) 
+    ) 
+    .with_flex_spacer(1.0)
+    .with_child (
+        Button::new("Save")
+           .disabled_if(|data:&AppState, _| data.isSaveDisabled())    
+           .on_click(| ctx, _data:&mut AppState, _env| ctx.submit_command(COMMAND_SAVE.with( "".to_string() ) ) ) 
     ) 
     .with_spacer(5.0)
 }

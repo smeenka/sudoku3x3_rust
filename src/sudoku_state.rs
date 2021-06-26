@@ -57,6 +57,10 @@ impl SudokuState {
         self.init_count = counts.0;
         self.curr_count = counts.1;
     }
+    pub fn play(&mut self, board:&SudokuBoard) {
+        self.do_count(board);
+        self.game_state = GameState::ManualInput;
+    }
 
 
     pub fn resolve_step( &mut self, board:&SudokuBoard) -> GameState {
@@ -65,7 +69,9 @@ impl SudokuState {
         for square in board.all_logic_squares() {
             match self.reduce_square(square)  {
                 Ok(_)   => self.game_state = GameState::Stepping,
-                Err(_)  => self.game_state = GameState::Error,
+                Err(_)  => {
+                    self.game_state = GameState::Error;
+                    return self.game_state.clone()},
             }
         }
         self.do_count(board);
@@ -218,8 +224,9 @@ mod tests {
         let bref = board.wire();
         bref.init();
         bref.show();
+        let  mut state = SudokuState::new();
         for _ in 0 .. 3 {
-            bref.resolve_step().expect("something wrong");
+            state.resolve_step(bref);
             bref.show();
         }
     }
