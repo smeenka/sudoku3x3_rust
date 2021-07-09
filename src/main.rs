@@ -8,6 +8,7 @@ extern crate ini;
 use sudoku3x3::{
     controller::*,
     sudoku_board::*,
+    sudoku_state::*,
     data::*
 };
 
@@ -300,7 +301,7 @@ fn make_numberselect_menu (cell:RcSudokuCell) -> Menu<AppState> {
             MenuItem::new(LocalizedString::new( HEX_STRS[i] ) )
                 .on_activate( move |_, data:&mut AppState, _| {
                     cellclone.set_init_value(i);
-                    data.do_step();
+                    data.do_reduce();
                 })    
                 .enabled( evaluate_cellstate(&state, i) )
             );
@@ -329,20 +330,19 @@ fn ui_build_statusline() -> impl Widget<AppState> {
         .padding(1.0)
     )
     .with_flex_spacer(10.0)
-    .with_child( Label::new(|data: &String, _env: &_| data.clone())
+    .with_child( Label::new(|data: &SudokuState, _env: &_| format!("{}", data.get_init_count() ) ) 
         .with_text_size(16.0)
-        .lens(AppState::init_count)
-        .padding(1.0)
+        .lens(AppState::su_state)
     )
     .with_flex_spacer(10.0)
-    .with_child( Label::new(|data: &String, _env: &_| data.clone() ) 
+    .with_child( Label::new(|data: &SudokuState, _env: &_| format!("{}", data.get_curr_count() ) ) 
         .with_text_size(16.0)
-        .lens(AppState::curr_count)
+        .lens(AppState::su_state)
     )
     .with_flex_spacer(10.0)
-    .with_child( Label::new(|data: &String, _env: &_| data.clone() ) 
+    .with_child( Label::new(|data: &SudokuState, _env: &_| format!("{}", data.get_step_count() ) ) 
         .with_text_size(16.0)
-        .lens(AppState::step_count)
+        .lens(AppState::su_state)
     )
     .with_flex_spacer(10.0)
     .with_child( Label::new(|data: &String, _env: &_| data.clone())

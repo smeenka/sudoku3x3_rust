@@ -44,12 +44,8 @@ pub struct SelectState {
 pub struct AppState {
     /// The number displayed. Generally a valid float.
     pub message: String,
-    step_count: String,
-    init_count:String,
-    curr_count:String,
     pub su_board: Arc<SudokuBoard>, // non mutable reference, for presentation only
     //pub select_window:SelectState,
-    #[data(ignore)]
     pub su_state: SudokuState,   // owner of the mutable sudoku state 
     #[data(ignore)]
     pub board_list:im::Vector<String>,
@@ -64,9 +60,6 @@ impl AppState {
        board.wire();
        AppState {
             message: "Select a board".to_string(),
-            step_count: "0".to_string(),
-            init_count:"0".to_string(),
-            curr_count:"0".to_string(),
             su_board: Arc::new(board),
             su_state:SudokuState::new(),
             selected:"".into(),
@@ -127,7 +120,7 @@ impl AppState {
                 } 
             }
         }
-        self.su_state.play(board);
+        self.su_state.reduce_step(board);
         self.message = "Rightclick for manual select".to_string();
     }
     
@@ -189,9 +182,6 @@ impl AppState {
             GameState::ManualInput  =>  self.message = "Manual Input".to_string(),            
             _                       =>  self.message = "unknown".to_string()
         }
-        self.step_count = format!("{}", state.get_step_count());
-        self.init_count= format!("{}",  state.get_init_count());
-        self.curr_count= format!("{}",  state.get_curr_count());
         //board.show();
     }  
     pub fn do_step_back(&mut self) {
@@ -199,20 +189,23 @@ impl AppState {
         let board = & *self.su_board;
 
         state.step_back(board);
-        self.step_count = format!("{}", state.get_step_count());
-        self.init_count= format!("{}",  state.get_init_count());
-        self.curr_count= format!("{}",  state.get_curr_count());
         self.message = "Stepping..".to_string();
-        
+    }  
+
+    pub fn do_reduce(&mut self) {
+        let state = &mut self.su_state;
+        let board = & *self.su_board;
+        match state.reduce_step(board){
+            GameState::Error        =>  self.message = "ERROR".to_string(),
+            _                       =>  self.message = "Manual Input".to_string(),            
+        }
+        //board.show();
     }  
     pub fn do_restart(&mut self) {
         let state = &mut self.su_state;
         let board = & *self.su_board;
         board.reset();
         state.reset();
-        self.step_count = format!("{}", state.get_step_count());
-        self.init_count= format!("{}",  state.get_init_count());
-        self.curr_count= format!("{}",  state.get_curr_count());
     }
     pub fn autoselect(&mut self) {
         let listref = &self.board_list;
@@ -224,7 +217,7 @@ impl AppState {
         for s in result {
             self.autoselect_list.push_back(s.to_string());
         }
-    }    
+    }
 }
 
 /*

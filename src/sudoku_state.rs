@@ -5,7 +5,7 @@ use std::collections::*;
 use crate::sudoku_board::*;
 use crate::data::*;
 
-#[derive(Clone, PartialEq,Debug)]
+#[derive(Data, Clone, PartialEq,Debug)]
 pub enum GameState{
     Select,
     ManualInput,
@@ -16,14 +16,14 @@ pub enum GameState{
 
 
 
-#[derive(Clone,  Lens, Debug )]
+#[derive(Data, Clone,  Lens, Debug )]
 pub struct SudokuState{
     step_count:usize, // current step count
     init_count:usize, // initial count of resolved cells
     curr_count:usize, // currentlly resolved cells
     game_state:GameState,
-    printRowDetails:bool,
-    printCellDetails:bool,
+    print_row_details:bool,
+    print_cell_details:bool,
 }
 
 
@@ -34,8 +34,8 @@ impl SudokuState {
             init_count:0,
             curr_count:0,
             game_state:GameState::Select,      
-            printRowDetails:false,
-            printCellDetails:false,
+            print_row_details:false,
+            print_cell_details:false,
         }
     }
     pub fn reset(&mut self){
@@ -62,12 +62,23 @@ impl SudokuState {
         self.game_state = GameState::ManualInput;
     }
 
+    pub fn reduce_step( &mut self, board:&SudokuBoard) -> GameState {
+        board.push();
+        for square in board.all_logic_squares() {
+            match self.reduce_square(square)  {
+                Ok(_)   => self.game_state = GameState::Stepping,
+                Err(_)  => self.game_state = GameState::Error,
+            }
+        }
+        self.do_count(board);
+        self.game_state.clone()
+    }
 
     pub fn resolve_step( &mut self, board:&SudokuBoard) -> GameState {
         self.step_count += 1;
         board.push();
         for square in board.all_logic_squares() {
-            match self.reduce_square(square)  {
+            match self.resolve_square(square)  {
                 Ok(_)   => self.game_state = GameState::Stepping,
                 Err(_)  => {
                     self.game_state = GameState::Error;
@@ -90,6 +101,9 @@ impl SudokuState {
             self.game_state = GameState::Stepping;
         } 
     }
+    pub fn reduce_only(&mut self,  board:&SudokuBoard){
+
+    }
 
 /********************************************************************************************************** */
     /** Solver logica  */
@@ -110,6 +124,21 @@ impl SudokuState {
                 }
             }
         }
+        if self.print_cell_details {
+            print!("{:10} ", row_col_square.get_id());
+            for cell in cells {
+                print!("-{:09b}-",  cell.get_unresolved_mask());
+            }
+            println!();
+        }
+        Ok(0)
+    }
+    pub fn resolve_square(&self, row_col_square: &dyn RowColSquare) -> Result<usize, String> {
+        // Step 1
+ 
+        self.reduce_square(row_col_square)?;
+ 
+        let cells = row_col_square.get_cells();
         // Step 2 the inverse of step 1
         // in step 1 for each given cell we investigate the possible values
         // in step 2 for each given value investigate the possible cells
@@ -184,22 +213,13 @@ impl SudokuState {
             }
         }
         // Show the results on the terminal
-        if self.printRowDetails {
+        if self.print_row_details {
             print!("{:10} ", row_col_square.get_id());
             for n in 0..CELL_SIZE {
                 print!(" {}:{:09b} ", n+1, possible_cells[n] );
             }
             println!();
         }
-        /*
-        if self.printCellDetails {
-            print!("{:10} ", row_col_square.get_id());
-            for (key, val) in count_hash.iter() {
-                print!("-{:09b}:{:?}-",  key, val);
-            }
-            println!();
-        }
-        */
         Ok(0)
     }
     /********************************************************************************************************** */

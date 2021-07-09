@@ -29,7 +29,7 @@ pub enum CellState{
 
 #[derive(Clone )]
 pub struct SudokuCell {
-    pub value: CellState,
+    value: CellState,
     row:usize,
     col:usize,
     idx:usize,
@@ -37,7 +37,7 @@ pub struct SudokuCell {
 }
 
 impl SudokuCell {
-    pub fn new(r:usize,c:usize) -> SudokuCell {
+    fn new(r:usize,c:usize) -> SudokuCell {
         SudokuCell{
            value: CellState::UnSolved(CELL_RESET_MASK),
            row:r,
@@ -46,14 +46,14 @@ impl SudokuCell {
            stack:vec![],
         }
     }
-    pub fn get_value(&self) -> String {
+    fn get_value(&self) -> String {
         // dereference the Rc into the CellState
         match self.value {
             CellState::Solved(v,_) => format!("{}",v.trailing_zeros() + 1 ),
             _ => String::from("-"),
         }
     }
-    pub fn as_string(&self) -> String {
+    fn as_string(&self) -> String {
         // dereference the Rc into the CellState
         match self.value {
             CellState::Solved(v,_) => format!("{}",v.trailing_zeros() + 1 ),
@@ -66,7 +66,7 @@ impl SudokuCell {
     /**
      *  If this cell is resolved return the the bitmask else 0
      */
-    pub fn get_resolved_mask(&self) -> usize {
+    fn get_resolved_mask(&self) -> usize {
         // a 1 bit in the mask indicate a resolved cell
         match self.value {
             CellState::Solved(v,_)  => v, 
@@ -77,7 +77,7 @@ impl SudokuCell {
      *  If this cell is resolved return the bitmask (with one bit!). 
      *  If this cell is NOT resolved return the possibities for this cell. 
      */
-    pub fn get_unresolved_mask(&self) -> usize {
+    fn get_unresolved_mask(&self) -> usize {
         match self.value {
             CellState::Solved(v,_) =>  v, 
             CellState::UnSolved(n)  =>  n, 
@@ -86,9 +86,9 @@ impl SudokuCell {
     }
  
     // If this cell is NOT resolved substract bits in the possible bit masks.
-    // If only one bit is left, mark as solved
+    // This function will not change the resolved state of the cell
     // Return a Result 
-    pub fn reduce(&mut self, other_mask:usize)  -> Result<usize, String> {
+    fn reduce(&mut self, other_mask:usize)  -> Result<usize, String> {
         match self.value {
             CellState::Solved(_v,_) => return Ok(0),
             CellState::UnSolved(my_mask) => {  
@@ -96,12 +96,12 @@ impl SudokuCell {
                     Ok(0) 
                 } else {
                     let new_mask = my_mask & !other_mask;
+                    self.value = CellState::UnSolved( new_mask);
+
                     let nr_bits = new_mask.count_ones(); 
                     if nr_bits == 1 {
-                        self.value = CellState::Solved( new_mask, CellActor::Resolved);  
-                        println!("Solved in reduce cell {:?} value {} my mask {:09b}  other {:09b}",  self.get_pos(), self.as_string(), my_mask, other_mask  );
+                        println!("After reduce only one bit left!  {:?}  my mask {:09b}  other {:09b}",  self.get_pos(),  my_mask, other_mask  );
                     } else  if my_mask != new_mask {
-                        self.value = CellState::UnSolved( new_mask)
                     };
                     if nr_bits == 0 {
                         let message = format!("Error: in reduce zero bits left for {:?}  incoming mask {:09b}", self.get_pos(), other_mask);
@@ -116,10 +116,30 @@ impl SudokuCell {
             CellState::Error => Err("Cell in Error state".to_string())
         }        
     }
-    pub fn set_init_value(&mut self, v:usize)  {
+
+    // If this cell is NOT resolved , and has only one possible value left
+    // change the state from Unsolved to Solved and return true
+    // In all other cases do nothing and return false.
+    fn resolve(&mut self)  -> bool {
+        match self.value {
+            CellState::UnSolved(my_mask) => {  
+                    let nr_bits = my_mask.count_ones(); 
+                    if nr_bits == 1 {
+                        self.value = CellState::Solved( my_mask, CellActor::Resolved);  
+                        println!("Resolved in reduce cell {:?} value {} ",  self.get_pos(), self.as_string()  );
+                        true  
+                    } else {
+                        false 
+                    }
+                },
+            _  => false 
+        }            
+    }
+
+    fn set_init_value(&mut self, v:usize)  {
         self.value = CellState::Solved( 1 << (v - 1) , CellActor::StartValue); 
     } 
-    pub fn reset(&mut self)  {
+    fn reset(&mut self)  {
         self.value = CellState::UnSolved(CELL_RESET_MASK); 
         self.stack = vec![];
     } 
@@ -127,7 +147,7 @@ impl SudokuCell {
      * Set the solved value, but only if the current mask is equal to the incoming value
      * return true if the value is set (masks are equal, false if not set)
      */
-    pub fn set_solved_value(&mut self, mask:usize) -> bool  {
+    fn set_solved_value(&mut self, mask:usize) -> bool  {
         match self.value {
             CellState::UnSolved(n)  => {
                 if (n & mask)  == mask {
@@ -143,7 +163,7 @@ impl SudokuCell {
     // return (0,0) if cell is not resolved
     // return (1,1) if cell is resolved, but in initial state
     // return (0,1) if the cell is resolved due to stepping
-    pub fn count_solved(&self) -> (usize,usize) {
+    fn count_solved(&self) -> (usize,usize) {
         match &self.value {
             CellState::Solved(_,actor) => {
                 match  actor {
@@ -199,6 +219,9 @@ impl RcSudokuCell {
     }
     pub fn reduce(&self, other: usize) -> Result<usize, String>   {
         self.cell.borrow_mut().reduce(other)
+    }
+    pub fn resolve(&self) -> bool   {
+        self.cell.borrow_mut().resolve()
     }
     pub fn get_resolved_mask(&self) -> usize {
         self.cell.borrow().get_resolved_mask()
